@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: courseok-route-backend
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: CACHE_TTL_MS
+        value: "900000"

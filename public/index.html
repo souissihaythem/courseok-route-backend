@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CourseOK — Routes cache</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #1a1f29;
+      --text: #e8ecf4;
+      --muted: #9aa3b5;
+      --lime: #b8f22c;
+      --red: #ff6b6b;
+      --blue: #6ea8fe;
+      --border: #2a3140;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1c2740, var(--bg));
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 28px 24px 8px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    h1 { margin: 0 0 8px; font-size: 1.6rem; }
+    .sub { color: var(--muted); margin: 0; }
+    .stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 18px 0 8px;
+    }
+    .pill {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 0.9rem;
+    }
+    .pill strong { color: var(--lime); }
+    main { max-width: 1100px; margin: 0 auto; padding: 12px 24px 40px; }
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+      align-items: center;
+    }
+    button, input {
+      font: inherit;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      padding: 10px 14px;
+    }
+    button {
+      cursor: pointer;
+      background: linear-gradient(180deg, #2a3348, var(--panel));
+    }
+    button.primary { background: var(--lime); color: #111; border: none; font-weight: 600; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    th, td {
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      font-size: 0.92rem;
+    }
+    th { color: var(--muted); font-weight: 600; background: #151a24; }
+    tr:last-child td { border-bottom: none; }
+    .src-cache { color: var(--blue); }
+    .src-google { color: var(--lime); }
+    .src-error { color: var(--red); }
+    .addr { display: block; max-width: 280px; word-break: break-word; }
+    .empty { color: var(--muted); padding: 28px; text-align: center; }
+    .try {
+      margin-top: 22px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: #141925;
+    }
+    .try h2 { margin: 0 0 12px; font-size: 1.05rem; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+    .row input { flex: 1; min-width: 220px; }
+    #tryOut { color: var(--muted); white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>CourseOK — cache trajets</h1>
+    <p class="sub">Recherches partagées (Google Routes). Cache TTL 15 min — les chauffeurs réutilisent la même ETA.</p>
+    <div class="stats">
+      <div class="pill">Santé : <strong id="health">…</strong></div>
+      <div class="pill">Clé Maps : <strong id="mapsKey">…</strong></div>
+      <div class="pill">Cache mémoire : <strong id="cacheSize">…</strong></div>
+      <div class="pill">Historique : <strong id="historySize">…</strong></div>
+      <div class="pill">TTL : <strong id="ttl">…</strong></div>
+    </div>
+  </header>
+  <main>
+    <div class="toolbar">
+      <button class="primary" id="refreshBtn">Actualiser</button>
+      <button id="clearBtn">Vider l’historique</button>
+      <label>Auto-refresh
+        <input type="checkbox" id="autoRefresh" checked />
+      </label>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Heure</th>
+          <th>Source</th>
+          <th>Départ</th>
+          <th>Arrivée</th>
+          <th>Durée</th>
+          <th>Distance</th>
+          <th>Détail</th>
+        </tr>
+      </thead>
+      <tbody id="rows">
+        <tr><td colspan="7" class="empty">Chargement…</td></tr>
+      </tbody>
+    </table>
+
+    <section class="try">
+      <h2>Tester une recherche</h2>
+      <div class="row">
+        <input id="pickup" placeholder="Adresse départ" value="32 Rue de Monceau, 75008 Paris" />
+        <input id="dropoff" placeholder="Adresse arrivée" value="14 Av. du Général de Gaulle, 92360 Meudon" />
+      </div>
+      <button class="primary" id="tryBtn">Calculer</button>
+      <pre id="tryOut"></pre>
+    </section>
+  </main>
+  <script>
+    const rows = document.getElementById("rows");
+    let timer = null;
+
+    function fmtTime(ms) {
+      try { return new Date(ms).toLocaleString("fr-FR"); } catch { return String(ms); }
+    }
+    function fmtMin(v) {
+      if (v == null || Number.isNaN(Number(v))) return "—";
+      return Number(v).toFixed(1) + " min";
+    }
+    function fmtKm(meters) {
+      if (meters == null) return "—";
+      return (meters / 1000).toFixed(1) + " km";
+    }
+    function srcClass(source) {
+      if (source === "cache") return "src-cache";
+      if (source === "google") return "src-google";
+      return "src-error";
+    }
+
+    async function loadHealth() {
+      const res = await fetch("/api/health");
+      const j = await res.json();
+      document.getElementById("health").textContent = j.ok ? "OK" : "KO";
+      document.getElementById("mapsKey").textContent = j.hasMapsKey ? "oui" : "absente";
+      document.getElementById("cacheSize").textContent = j.cacheSize;
+      document.getElementById("historySize").textContent = j.historySize;
+      document.getElementById("ttl").textContent = Math.round((j.cacheTtlMs || 0) / 60000) + " min";
+    }
+
+    async function loadSearches() {
+      const res = await fetch("/api/searches?limit=200");
+      const j = await res.json();
+      const items = j.items || [];
+      if (!items.length) {
+        rows.innerHTML = '<tr><td colspan="7" class="empty">Aucune recherche pour le moment.</td></tr>';
+        return;
+      }
+      rows.innerHTML = items.map((it) => `
+        <tr>
+          <td>${fmtTime(it.atMs)}</td>
+          <td class="${srcClass(it.source)}">${it.source || "—"}</td>
+          <td><span class="addr">${escapeHtml(it.pickupFormatted || it.pickup || "")}</span></td>
+          <td><span class="addr">${escapeHtml(it.dropoffFormatted || it.dropoff || "")}</span></td>
+          <td>${fmtMin(it.durationMinutes)}</td>
+          <td>${fmtKm(it.distanceMeters)}</td>
+          <td>${it.error ? escapeHtml(it.error) : (it.cacheAgeMs != null ? "âge cache " + Math.round(it.cacheAgeMs/1000) + "s" : (it.latencyMs != null ? it.latencyMs + " ms" : "—"))}</td>
+        </tr>
+      `).join("");
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    async function refresh() {
+      await Promise.all([loadHealth(), loadSearches()]);
+    }
+
+    document.getElementById("refreshBtn").onclick = refresh;
+    document.getElementById("clearBtn").onclick = async () => {
+      if (!confirm("Vider l’historique ?")) return;
+      await fetch("/api/searches", { method: "DELETE" });
+      await refresh();
+    };
+    document.getElementById("autoRefresh").onchange = (e) => {
+      if (e.target.checked) timer = setInterval(refresh, 5000);
+      else { clearInterval(timer); timer = null; }
+    };
+    document.getElementById("tryBtn").onclick = async () => {
+      const pickup = document.getElementById("pickup").value;
+      const dropoff = document.getElementById("dropoff").value;
+      document.getElementById("tryOut").textContent = "Calcul…";
+      const res = await fetch("/api/trip-duration", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pickup, dropoff }),
+      });
+      const j = await res.json();
+      document.getElementById("tryOut").textContent = JSON.stringify(j, null, 2);
+      await refresh();
+    };
+
+    refresh();
+    timer = setInterval(refresh, 5000);
+  </script>
+</body>
+</html>
