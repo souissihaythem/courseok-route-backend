@@ -1,26 +1,24 @@
 /**
  * CourseOK route backend — shared Google Routes/Geocode cache (15 min) + search history UI.
- * Keep GOOGLE_MAPS_API_KEY in .env only (never commit).
+ * Keep secrets in .env / Render env only (never commit).
+ *
+ * History persistence:
+ * - TURSO_DATABASE_URL + TURSO_AUTH_TOKEN → free durable Turso DB (survives Render sleep)
+ * - else → local data/searches.json (wiped on Render Free restart)
  */
 require("dotenv").config();
 const express = require("express");
-const fs = require("fs");
 const path = require("path");
+const { createHistoryStore, MAX_HISTORY } = require("./historyStore");
 
 const PORT = Number(process.env.PORT || 8787);
 const CACHE_TTL_MS = Number(process.env.CACHE_TTL_MS || 15 * 60 * 1000);
 const GOOGLE_MAPS_API_KEY = (process.env.GOOGLE_MAPS_API_KEY || "").trim();
 const ADMIN_TOKEN = (process.env.ADMIN_TOKEN || "").trim();
 const DATA_DIR = path.join(__dirname, "..", "data");
-const HISTORY_FILE = path.join(DATA_DIR, "searches.json");
-const MAX_HISTORY = 500;
-
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 /** @type {Map<string, { durationMinutes: number, distanceMeters: number|null, cachedAtMs: number, pickup: string, dropoff: string }>} */
 const routeCache = new Map();
-/** @type {Array<object>} */
-let searchHistory = loadHistory();
 
 const app = express();
 app.use(express.json({ limit: "32kb" }));
@@ -36,30 +34,6 @@ function normalizeAddress(s) {
 
 function routeKey(pickup, dropoff) {
   return `${normalizeAddress(pickup)}|${normalizeAddress(dropoff)}`;
-}
-
-function loadHistory() {
-  try {
-    if (!fs.existsSync(HISTORY_FILE)) return [];
-    const raw = JSON.parse(fs.readFileSync(HISTORY_FILE, "utf8"));
-    return Array.isArray(raw) ? raw : [];
-  } catch {
-    return [];
-  }
-}
-
-function persistHistory() {
-  try {
-    fs.writeFileSync(HISTORY_FILE, JSON.stringify(searchHistory.slice(0, MAX_HISTORY), null, 2));
-  } catch (err) {
-    console.error("persistHistory failed", err.message);
-  }
-}
-
-function pushHistory(entry) {
-  searchHistory.unshift(entry);
-  if (searchHistory.length > MAX_HISTORY) searchHistory.length = MAX_HISTORY;
-  persistHistory();
 }
 
 function pruneCache(now = Date.now()) {
@@ -112,127 +86,138 @@ async function computeRoute(origin, destination) {
   };
 }
 
-app.get("/api/health", (_req, res) => {
-  pruneCache();
-  res.json({
-    ok: true,
-    hasMapsKey: Boolean(GOOGLE_MAPS_API_KEY),
-    cacheSize: routeCache.size,
-    historySize: searchHistory.length,
-    cacheTtlMs: CACHE_TTL_MS,
-  });
-});
+async function main() {
+  const history = await createHistoryStore(DATA_DIR);
 
-app.get("/api/searches", (req, res) => {
-  if (ADMIN_TOKEN && req.header("x-admin-token") !== ADMIN_TOKEN) {
-    return res.status(401).json({ error: "unauthorized" });
-  }
-  pruneCache();
-  const limit = Math.min(Number(req.query.limit) || 100, MAX_HISTORY);
-  res.json({
-    cacheTtlMs: CACHE_TTL_MS,
-    items: searchHistory.slice(0, limit),
-  });
-});
-
-app.delete("/api/searches", (req, res) => {
-  if (ADMIN_TOKEN && req.header("x-admin-token") !== ADMIN_TOKEN) {
-    return res.status(401).json({ error: "unauthorized" });
-  }
-  searchHistory = [];
-  persistHistory();
-  res.json({ ok: true });
-});
-
-/**
- * Shared trip duration: cache hit (15 min) or Google Geocode + Routes.
- * Body: { pickup: string, dropoff: string }
- */
-app.post("/api/trip-duration", async (req, res) => {
-  const pickup = String(req.body?.pickup || "").trim();
-  const dropoff = String(req.body?.dropoff || "").trim();
-  if (!pickup || !dropoff) {
-    return res.status(400).json({ error: "pickup and dropoff required" });
-  }
-  if (!GOOGLE_MAPS_API_KEY) {
-    return res.status(503).json({ error: "GOOGLE_MAPS_API_KEY not configured on server" });
-  }
-
-  pruneCache();
-  const key = routeKey(pickup, dropoff);
-  const now = Date.now();
-  const cached = routeCache.get(key);
-  if (cached && now - cached.cachedAtMs <= CACHE_TTL_MS) {
-    const entry = {
-      id: `${now}-${Math.random().toString(36).slice(2, 8)}`,
-      atMs: now,
-      pickup,
-      dropoff,
-      durationMinutes: cached.durationMinutes,
-      distanceMeters: cached.distanceMeters,
-      source: "cache",
-      cacheAgeMs: now - cached.cachedAtMs,
-    };
-    pushHistory(entry);
-    return res.json({
-      durationMinutes: cached.durationMinutes,
-      distanceMeters: cached.distanceMeters,
-      cached: true,
-      source: "cache",
+  app.get("/api/health", async (_req, res) => {
+    pruneCache();
+    res.json({
+      ok: true,
+      hasMapsKey: Boolean(GOOGLE_MAPS_API_KEY),
+      cacheSize: routeCache.size,
+      historySize: await history.size(),
+      historyStore: history.kind,
       cacheTtlMs: CACHE_TTL_MS,
-      cacheAgeMs: entry.cacheAgeMs,
     });
-  }
+  });
 
-  const started = Date.now();
-  try {
-    const [origin, destination] = await Promise.all([geocode(pickup), geocode(dropoff)]);
-    const route = await computeRoute(origin, destination);
-    routeCache.set(key, {
-      durationMinutes: route.durationMinutes,
-      distanceMeters: route.distanceMeters,
-      cachedAtMs: Date.now(),
-      pickup,
-      dropoff,
-    });
-    const entry = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      atMs: Date.now(),
-      pickup,
-      dropoff,
-      pickupFormatted: origin.formatted,
-      dropoffFormatted: destination.formatted,
-      durationMinutes: route.durationMinutes,
-      distanceMeters: route.distanceMeters,
-      source: "google",
-      latencyMs: Date.now() - started,
-    };
-    pushHistory(entry);
-    return res.json({
-      durationMinutes: route.durationMinutes,
-      distanceMeters: route.distanceMeters,
-      cached: false,
-      source: "google",
+  app.get("/api/searches", async (req, res) => {
+    if (ADMIN_TOKEN && req.header("x-admin-token") !== ADMIN_TOKEN) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    pruneCache();
+    const limit = Math.min(Number(req.query.limit) || 100, MAX_HISTORY);
+    res.json({
       cacheTtlMs: CACHE_TTL_MS,
-      latencyMs: entry.latencyMs,
+      store: history.kind,
+      items: await history.list(limit),
     });
-  } catch (err) {
-    console.error("trip-duration error", err.message);
-    pushHistory({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      atMs: Date.now(),
-      pickup,
-      dropoff,
-      source: "error",
-      error: String(err.message || err),
-      latencyMs: Date.now() - started,
-    });
-    return res.status(502).json({ error: String(err.message || err) });
-  }
-});
+  });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`CourseOK route backend on http://0.0.0.0:${PORT}`);
-  console.log(`Maps key: ${GOOGLE_MAPS_API_KEY ? "configured" : "MISSING"}`);
-  console.log(`Cache TTL: ${CACHE_TTL_MS / 1000}s`);
+  app.delete("/api/searches", async (req, res) => {
+    if (ADMIN_TOKEN && req.header("x-admin-token") !== ADMIN_TOKEN) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    await history.clear();
+    res.json({ ok: true });
+  });
+
+  /**
+   * Shared trip duration: cache hit (15 min) or Google Geocode + Routes.
+   * Body: { pickup: string, dropoff: string }
+   */
+  app.post("/api/trip-duration", async (req, res) => {
+    const pickup = String(req.body?.pickup || "").trim();
+    const dropoff = String(req.body?.dropoff || "").trim();
+    if (!pickup || !dropoff) {
+      return res.status(400).json({ error: "pickup and dropoff required" });
+    }
+    if (!GOOGLE_MAPS_API_KEY) {
+      return res.status(503).json({ error: "GOOGLE_MAPS_API_KEY not configured on server" });
+    }
+
+    pruneCache();
+    const key = routeKey(pickup, dropoff);
+    const now = Date.now();
+    const cached = routeCache.get(key);
+    if (cached && now - cached.cachedAtMs <= CACHE_TTL_MS) {
+      const entry = {
+        id: `${now}-${Math.random().toString(36).slice(2, 8)}`,
+        atMs: now,
+        pickup,
+        dropoff,
+        durationMinutes: cached.durationMinutes,
+        distanceMeters: cached.distanceMeters,
+        source: "cache",
+        cacheAgeMs: now - cached.cachedAtMs,
+      };
+      await history.push(entry);
+      return res.json({
+        durationMinutes: cached.durationMinutes,
+        distanceMeters: cached.distanceMeters,
+        cached: true,
+        source: "cache",
+        cacheTtlMs: CACHE_TTL_MS,
+        cacheAgeMs: entry.cacheAgeMs,
+      });
+    }
+
+    const started = Date.now();
+    try {
+      const [origin, destination] = await Promise.all([geocode(pickup), geocode(dropoff)]);
+      const route = await computeRoute(origin, destination);
+      routeCache.set(key, {
+        durationMinutes: route.durationMinutes,
+        distanceMeters: route.distanceMeters,
+        cachedAtMs: Date.now(),
+        pickup,
+        dropoff,
+      });
+      const entry = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        atMs: Date.now(),
+        pickup,
+        dropoff,
+        pickupFormatted: origin.formatted,
+        dropoffFormatted: destination.formatted,
+        durationMinutes: route.durationMinutes,
+        distanceMeters: route.distanceMeters,
+        source: "google",
+        latencyMs: Date.now() - started,
+      };
+      await history.push(entry);
+      return res.json({
+        durationMinutes: route.durationMinutes,
+        distanceMeters: route.distanceMeters,
+        cached: false,
+        source: "google",
+        cacheTtlMs: CACHE_TTL_MS,
+        latencyMs: entry.latencyMs,
+      });
+    } catch (err) {
+      console.error("trip-duration error", err.message);
+      await history.push({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        atMs: Date.now(),
+        pickup,
+        dropoff,
+        source: "error",
+        error: String(err.message || err),
+        latencyMs: Date.now() - started,
+      });
+      return res.status(502).json({ error: String(err.message || err) });
+    }
+  });
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`CourseOK route backend on http://0.0.0.0:${PORT}`);
+    console.log(`Maps key: ${GOOGLE_MAPS_API_KEY ? "configured" : "MISSING"}`);
+    console.log(`Cache TTL: ${CACHE_TTL_MS / 1000}s`);
+    console.log(`History: ${history.kind}`);
+  });
+}
+
+main().catch((err) => {
+  console.error("Fatal startup error", err);
+  process.exit(1);
 });

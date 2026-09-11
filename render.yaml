@@ -4,6 +4,7 @@ services:
     runtime: node
     plan: free
     region: frankfurt
+    rootDir: backend
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /api/health
@@ -12,3 +13,7 @@ services:
         sync: false
       - key: CACHE_TTL_MS
         value: "900000"
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
