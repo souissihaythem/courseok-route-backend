@@ -177,7 +177,6 @@
       document.getElementById("cacheSize").textContent = j.cacheSize;
       document.getElementById("historySize").textContent = j.historySize;
       document.getElementById("historyStore").textContent = j.historyStore || "file";
-      document.getElementById("ttl").textContent = `${Math.round((j.cacheTtlMs || 0) / 60000)} min`;
       document.getElementById("ttl").textContent = Math.round((j.cacheTtlMs || 0) / 60000) + " min";
     }
 
