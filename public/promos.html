@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CourseOK — Promo codes</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #1a1f29;
+      --text: #e8ecf4;
+      --muted: #9aa3b5;
+      --lime: #b8f22c;
+      --red: #ff6b6b;
+      --border: #2a3140;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1c2740, var(--bg));
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header, main { max-width: 900px; margin: 0 auto; padding: 24px; }
+    h1 { margin: 0 0 8px; font-size: 1.5rem; }
+    .sub { color: var(--muted); }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+    input, button {
+      font: inherit;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      padding: 10px 14px;
+    }
+    button { cursor: pointer; }
+    button.primary { background: var(--lime); color: #111; border: none; font-weight: 600; }
+    button.danger { color: var(--red); }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); }
+    .msg { margin-top: 10px; color: var(--muted); white-space: pre-wrap; }
+    a { color: var(--lime); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Promo codes</h1>
+    <p class="sub">Ajouter / supprimer des codes qui créditent des analyses. <a href="/">← Cache trajets</a></p>
+  </header>
+  <main>
+    <div class="card">
+      <div class="row">
+        <input id="adminToken" type="password" placeholder="ADMIN_TOKEN" style="flex:1;min-width:180px" />
+        <button class="primary" id="saveToken">Mémoriser</button>
+        <button id="refreshBtn">Actualiser</button>
+      </div>
+      <div class="row">
+        <input id="code" placeholder="Code (ex. IYED)" style="flex:1;min-width:140px" />
+        <input id="analyses" type="number" min="1" placeholder="Analyses" value="1000" style="width:140px" />
+        <button class="primary" id="addBtn">Ajouter / maj</button>
+      </div>
+      <pre class="msg" id="msg"></pre>
+    </div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr><th>Code</th><th>Analyses</th><th>Actif</th><th></th></tr>
+        </thead>
+        <tbody id="rows">
+          <tr><td colspan="4">…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+  <script>
+    const msg = document.getElementById("msg");
+    const rows = document.getElementById("rows");
+    const tokenKey = "courseok_admin_token";
+
+    function token() {
+      return document.getElementById("adminToken").value.trim();
+    }
+    function headers() {
+      const h = { "Content-Type": "application/json" };
+      const t = token();
+      if (t) h["x-admin-token"] = t;
+      return h;
+    }
+
+    document.getElementById("adminToken").value = localStorage.getItem(tokenKey) || "";
+    document.getElementById("saveToken").onclick = () => {
+      localStorage.setItem(tokenKey, token());
+      msg.textContent = "Token mémorisé.";
+    };
+
+    async function load() {
+      msg.textContent = "";
+      const res = await fetch("/api/admin/promos", { headers: headers() });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        msg.textContent = j.error || ("HTTP " + res.status);
+        rows.innerHTML = '<tr><td colspan="4">Erreur</td></tr>';
+        return;
+      }
+      const items = j.items || [];
+      if (!items.length) {
+        rows.innerHTML = '<tr><td colspan="4">Aucun promo</td></tr>';
+        return;
+      }
+      rows.innerHTML = items.map((p) => `
+        <tr>
+          <td><strong>${escapeHtml(p.code)}</strong></td>
+          <td>${p.analyses}</td>
+          <td>${p.enabled ? "oui" : "non"}</td>
+          <td><button class="danger" data-code="${escapeHtml(p.code)}">Supprimer</button></td>
+        </tr>
+      `).join("");
+      rows.querySelectorAll("button[data-code]").forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm("Supprimer " + btn.dataset.code + " ?")) return;
+          const r = await fetch("/api/admin/promos/" + encodeURIComponent(btn.dataset.code), {
+            method: "DELETE",
+            headers: headers(),
+          });
+          const body = await r.json().catch(() => ({}));
+          msg.textContent = r.ok ? "Supprimé." : (body.error || "Erreur");
+          await load();
+        };
+      });
+    }
+
+    document.getElementById("refreshBtn").onclick = load;
+    document.getElementById("addBtn").onclick = async () => {
+      const code = document.getElementById("code").value.trim();
+      const analyses = Number(document.getElementById("analyses").value);
+      const res = await fetch("/api/admin/promos", {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ code, analyses, enabled: true }),
+      });
+      const j = await res.json().catch(() => ({}));
+      msg.textContent = res.ok ? ("OK " + j.code + " → +" + j.analyses) : (j.error || "Erreur");
+      if (res.ok) {
+        document.getElementById("code").value = "";
+        await load();
+      }
+    };
+
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    load();
+  </script>
+</body>
+</html>
