@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CourseOK — Activer la lecture d’écran</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .guide { max-width: 720px; margin: 0 auto; padding: 32px var(--pad) 80px; position: relative; z-index: 1; }
+    .guide h1 { font-family: var(--font-display); font-size: clamp(1.6rem, 4vw, 2.2rem); margin: 0 0 12px; }
+    .guide .lead { color: var(--muted); margin: 0 0 28px; line-height: 1.5; }
+    .guide h2 { font-family: var(--font-display); font-size: 1.15rem; margin: 28px 0 10px; color: var(--lime); }
+    .guide ol, .guide ul { margin: 0 0 16px; padding-left: 1.2rem; line-height: 1.55; color: var(--text); }
+    .guide li { margin-bottom: 8px; }
+    .guide .note {
+      background: rgba(255, 209, 102, 0.1);
+      border: 1px solid rgba(255, 209, 102, 0.35);
+      border-radius: 14px;
+      padding: 14px 16px;
+      color: var(--text);
+      line-height: 1.5;
+      margin: 16px 0;
+    }
+    .guide a.back { color: var(--lime); text-decoration: none; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <main class="guide">
+    <p><a class="back" href="./">← Retour à l’install</a></p>
+    <h1>Activer la lecture d’écran</h1>
+    <p class="lead">
+      Android 13+ bloque la lecture d’écran pour les apps installées hors Play Store.
+      <strong>Aucune app ne peut débloquer ça toute seule</strong> — c’est une sécurité système.
+      Tu dois l’autoriser <strong>une seule fois</strong> dans les réglages (sans câble USB).
+    </p>
+
+    <div class="note">
+      Important : le menu « Autoriser les paramètres restreints » est souvent
+      <strong>caché tant que tu n’as pas déclenché</strong> le message « Paramètre restreint »
+      en touchant CourseOK dans Accessibilité.
+    </div>
+
+    <h2>Samsung (Galaxy / One UI)</h2>
+    <ol>
+      <li>
+        (Si présent) <strong>Réglages → Sécurité et confidentialité → Bloqueur automatique</strong>
+        → désactive-le, sinon le sideload reste bloqué.
+      </li>
+      <li>
+        <strong>Réglages → Accessibilité → Applications installées</strong>
+        → touche <strong>CourseOK lecture d’écran</strong> (même grisé).
+      </li>
+      <li>
+        Valide le message <strong>« Paramètre restreint »</strong> (OK).
+      </li>
+      <li>
+        <strong>Réglages → Applications → CourseOK</strong>
+        (ou appui long sur l’icône CourseOK → Infos).
+      </li>
+      <li>
+        Touche <strong>⋮</strong> en haut à droite
+        <em>ou fais défiler</em> la page →
+        <strong>Autoriser les paramètres restreints</strong>
+        → confirme avec empreinte / code.
+      </li>
+      <li>
+        Retourne dans Accessibilité et active CourseOK.
+      </li>
+    </ol>
+
+    <h2>Autres Android (Pixel, etc.)</h2>
+    <ol>
+      <li>Accessibilité → Applications téléchargées → touche CourseOK → message « Restricted setting ».</li>
+      <li>Applications → CourseOK → ⋮ → Autoriser les paramètres restreints.</li>
+      <li>Réactive CourseOK dans Accessibilité.</li>
+    </ol>
+
+    <h2>Si le ⋮ n’apparaît toujours pas</h2>
+    <ul>
+      <li>Refais l’étape Accessibilité (déclencher le message), puis rouvre Infos CourseOK <strong>tout de suite</strong>.</li>
+      <li>Ferme CourseOK des apps récentes, puis appui long → Infos.</li>
+      <li>Désinstalle CourseOK, réinstalle l’APK depuis Fichiers / Chrome, puis refais les étapes <strong>avant</strong> d’ouvrir l’app.</li>
+    </ul>
+
+    <p class="lead" style="margin-top:28px">
+      Besoin d’aide : <a href="mailto:dupontalen@gmail.com">dupontalen@gmail.com</a>
+    </p>
+  </main>
+</body>
+</html>
