@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CourseOK — Analytics</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #1a1f29;
+      --text: #e8ecf4;
+      --muted: #9aa3b5;
+      --lime: #b8f22c;
+      --red: #ff6b6b;
+      --orange: #ffb347;
+      --blue: #6ea8fe;
+      --border: #2a3140;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1c2740, var(--bg));
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header, main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    h1 { margin: 0 0 8px; font-size: 1.5rem; }
+    .sub { color: var(--muted); margin: 0 0 8px; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+    input, button {
+      font: inherit;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      padding: 10px 14px;
+    }
+    button { cursor: pointer; }
+    button.primary { background: var(--lime); color: #111; border: none; font-weight: 600; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-top: 8px;
+    }
+    .stat {
+      background: #121722;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .stat .n { font-size: 1.8rem; font-weight: 700; line-height: 1.1; }
+    .stat .l { color: var(--muted); font-size: 0.85rem; margin-top: 6px; }
+    .stat.lime .n { color: var(--lime); }
+    .stat.orange .n { color: var(--orange); }
+    .stat.red .n { color: var(--red); }
+    .stat.blue .n { color: var(--blue); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    .msg { margin-top: 10px; color: var(--muted); white-space: pre-wrap; }
+    a { color: var(--lime); }
+    .note {
+      color: var(--muted);
+      font-size: 0.85rem;
+      line-height: 1.45;
+      margin-top: 12px;
+    }
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      border: 1px solid var(--border);
+    }
+    .pill.ok { color: var(--lime); border-color: rgba(184,242,44,0.4); }
+    .pill.no { color: var(--orange); border-color: rgba(255,179,71,0.4); }
+    code { font-size: 0.8rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Analytics</h1>
+    <p class="sub">
+      Funnel APK → install → permissions → activité.
+      <a href="/promos.html">Promo codes</a> ·
+      <a href="/">Cache trajets</a> ·
+      <a href="/install/">Install</a>
+    </p>
+  </header>
+  <main>
+    <div class="card">
+      <div class="row">
+        <input id="adminToken" type="password" placeholder="ADMIN_TOKEN" style="flex:1;min-width:180px" />
+        <button class="primary" id="saveToken">Mémoriser</button>
+        <button id="refreshBtn">Actualiser</button>
+      </div>
+      <pre class="msg" id="msg"></pre>
+    </div>
+
+    <div class="card">
+      <div class="grid" id="stats">
+        <div class="stat"><div class="n">—</div><div class="l">Chargement…</div></div>
+      </div>
+      <p class="note" id="note">
+        « Probables désinstallés » = appareils qui avaient les permissions puis plus aucun ping depuis N jours
+        (Android ne signale pas la désinstall hors Play Store).
+      </p>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 12px;font-size:1.1rem">Appareils récents</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Device</th>
+            <th>Permissions</th>
+            <th>Version</th>
+            <th>1er / dernier ping</th>
+            <th>Inactif</th>
+          </tr>
+        </thead>
+        <tbody id="rows">
+          <tr><td colspan="5">…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+  <script>
+    const msg = document.getElementById("msg");
+    const rows = document.getElementById("rows");
+    const stats = document.getElementById("stats");
+    const note = document.getElementById("note");
+    const tokenKey = "courseok_admin_token";
+
+    function token() {
+      return document.getElementById("adminToken").value.trim();
+    }
+    function headers() {
+      const h = {};
+      const t = token();
+      if (t) h["x-admin-token"] = t;
+      return h;
+    }
+    function fmt(ms) {
+      if (!ms) return "—";
+      try {
+        return new Date(ms).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+      } catch {
+        return String(ms);
+      }
+    }
+    function shortId(id) {
+      if (!id) return "—";
+      return id.length > 12 ? id.slice(0, 6) + "…" + id.slice(-4) : id;
+    }
+
+    document.getElementById("adminToken").value = localStorage.getItem(tokenKey) || "";
+    document.getElementById("saveToken").onclick = () => {
+      localStorage.setItem(tokenKey, token());
+      msg.textContent = "Token mémorisé.";
+    };
+
+    function renderStats(j) {
+      const cards = [
+        { n: j.downloads, l: "Téléchargements APK", cls: "blue" },
+        { n: j.installs, l: "Installs (1er ouverture)", cls: "lime" },
+        { n: j.permissionsGranted, l: "Permissions accordées", cls: "lime" },
+        { n: j.activeLast24h, l: "Actifs 24 h", cls: "" },
+        { n: j.activeLast7d, l: "Actifs 7 j", cls: "" },
+        { n: j.likelyUninstalled, l: "Probables désinstallés", cls: "red" },
+        { n: j.installedNeverPerms, l: "Installés sans permissions (inactifs)", cls: "orange" },
+      ];
+      stats.innerHTML = cards.map((c) => `
+        <div class="stat ${c.cls}">
+          <div class="n">${Number(c.n || 0)}</div>
+          <div class="l">${c.l}</div>
+        </div>
+      `).join("");
+      note.textContent =
+        "« Probables désinstallés » = avaient les permissions, puis aucun ping depuis " +
+        (j.inactiveAfterDays || 14) +
+        " jours (proxy — Android ne notifie pas la désinstall hors Play Store). " +
+        "Téléchargements = clics sur /downloads/CourseOK-latest.apk.";
+    }
+
+    async function load() {
+      msg.textContent = "";
+      const res = await fetch("/api/admin/analytics", { headers: headers() });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        msg.textContent = j.error || ("HTTP " + res.status);
+        rows.innerHTML = '<tr><td colspan="5">Erreur</td></tr>';
+        return;
+      }
+      renderStats(j);
+      const items = j.devices || [];
+      if (!items.length) {
+        rows.innerHTML = '<tr><td colspan="5">Aucun appareil encore (ouvre l’app ou télécharge l’APK)</td></tr>';
+        return;
+      }
+      rows.innerHTML = items.map((d) => {
+        const perms = d.permissions || {};
+        const bits = [
+          perms.accessibility ? "a11y" : null,
+          perms.location ? "loc" : null,
+          perms.notifications ? "notif" : null,
+          perms.battery ? "batt" : null,
+        ].filter(Boolean).join(", ") || "—";
+        return `
+          <tr>
+            <td><code title="${escapeHtml(d.deviceId)}">${escapeHtml(shortId(d.deviceId))}</code></td>
+            <td>
+              <span class="pill ${d.permissionsOk ? "ok" : "no"}">${d.permissionsOk ? "OK" : "non"}</span>
+              <div style="color:var(--muted);font-size:0.8rem;margin-top:4px">${escapeHtml(bits)}</div>
+            </td>
+            <td>${escapeHtml(d.appVersion || "—")}</td>
+            <td>${fmt(d.firstSeenMs)}<br/><span style="color:var(--muted)">${fmt(d.lastSeenMs)}</span></td>
+            <td>${d.inactiveDays == null ? "—" : d.inactiveDays + " j"}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    document.getElementById("refreshBtn").onclick = load;
+    load();
+  </script>
+</body>
+</html>

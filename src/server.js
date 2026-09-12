@@ -11,6 +11,7 @@ const express = require("express");
 const path = require("path");
 const { createHistoryStore, MAX_HISTORY } = require("./historyStore");
 const { createBillingStore, FREE_TRIAL_ANALYSES } = require("./billingStore");
+const { createAnalyticsStore } = require("./analyticsStore");
 const { PACKS, getPack } = require("./packs");
 
 const PORT = Number(process.env.PORT || 8787);
@@ -61,6 +62,12 @@ function requireAdmin(req, res) {
 function requireDeviceId(bodyOrQuery) {
   const deviceId = String(bodyOrQuery?.deviceId || "").trim();
   return deviceId || null;
+}
+
+function fireAndForget(promise) {
+  Promise.resolve(promise).catch((err) => {
+    console.error("background task failed:", err.message || err);
+  });
 }
 
 async function geocode(address) {
@@ -155,6 +162,7 @@ function isSumupPaid(checkout) {
 async function main() {
   const history = await createHistoryStore(DATA_DIR);
   const billing = await createBillingStore(DATA_DIR);
+  const analytics = await createAnalyticsStore(DATA_DIR);
 
   app.get("/api/health", async (_req, res) => {
     pruneCache();
@@ -168,16 +176,49 @@ async function main() {
       historySize: await history.size(),
       historyStore: history.kind,
       billingStore: billing.kind,
+      analyticsStore: analytics.kind,
       cacheTtlMs: CACHE_TTL_MS,
     });
   });
 
   /** Neutral public APK link (hides upstream hosting URL from the landing page). */
-  app.get(["/downloads/CourseOK-latest.apk", "/api/download-apk"], (_req, res) => {
+  app.get(["/downloads/CourseOK-latest.apk", "/api/download-apk"], async (_req, res) => {
     if (!APK_DOWNLOAD_URL) {
       return res.status(404).type("text").send("APK not configured");
     }
+    try {
+      await analytics.incrementDownloads();
+    } catch (err) {
+      console.error("analytics download count failed:", err.message || err);
+    }
     res.redirect(302, APK_DOWNLOAD_URL);
+  });
+
+  /** App heartbeat: install + permissions snapshot (no auth). */
+  app.post("/api/analytics/ping", async (req, res) => {
+    const deviceId = requireDeviceId(req.body);
+    if (!deviceId) return res.status(400).json({ error: "deviceId required" });
+    try {
+      const result = await analytics.recordPing({
+        deviceId,
+        permissions: req.body?.permissions,
+        allGranted: req.body?.allGranted,
+        appVersion: req.body?.appVersion,
+      });
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: String(err.message || err) });
+    }
+  });
+
+  app.get("/api/admin/analytics", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const summary = await analytics.summary();
+      res.json(summary);
+    } catch (err) {
+      res.status(500).json({ error: String(err.message || err) });
+    }
   });
 
   app.get("/api/billing/packs", (_req, res) => {
@@ -189,6 +230,15 @@ async function main() {
     if (!deviceId) return res.status(400).json({ error: "deviceId required" });
     try {
       const balance = await billing.registerDevice(deviceId);
+      // Count as install / activity even on older APKs that only call register.
+      fireAndForget(
+        analytics.recordPing({
+          deviceId,
+          appVersion: req.body?.appVersion,
+          permissions: req.body?.permissions,
+          allGranted: req.body?.allGranted,
+        }),
+      );
       res.json(balance);
     } catch (err) {
       res.status(500).json({ error: String(err.message || err) });
