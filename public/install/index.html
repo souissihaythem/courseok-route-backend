@@ -109,7 +109,7 @@
       <div class="help-card">
         <h2>Besoin d’aide pour l’installation ?</h2>
         <p>On vous accompagne pas à pas pour installer CourseOK sur Android.</p>
-        <a class="btn-secondary" href="mailto:suissi.haythem@gmail.com?subject=Aide%20installation%20CourseOK">
+        <a class="btn-secondary" href="mailto:haythemmm@gmail.com?subject=Aide%20installation%20CourseOK">
           Contacter le support
         </a>
       </div>
@@ -145,6 +145,12 @@
     </section>
   </main>
 
+  <div class="mobile-cta">
+    <a class="btn-primary" href="https://github.com/souissihaythem/VTCTripSelection/releases/download/v0.5.25/CourseOK-0.5.25-40-20260912.apk">
+      Télécharger l’app (.apk)
+    </a>
+  </div>
+
   <footer class="foot">
     <span>© CourseOK</span>
     <span id="versionLabel">APK bêta Android</span>
@@ -154,8 +160,11 @@
     // Optional override. Default = GitHub Release.
     // window.COURSEOK_APK_URL = "downloads/CourseOK-latest.apk";
     (function () {
-      var btn = document.getElementById("downloadBtn");
-      if (window.COURSEOK_APK_URL) btn.href = window.COURSEOK_APK_URL;
+      var url = window.COURSEOK_APK_URL;
+      if (!url) return;
+      document.querySelectorAll('a.btn-primary').forEach(function (btn) {
+        btn.href = url;
+      });
     })();
   </script>
 </body>
