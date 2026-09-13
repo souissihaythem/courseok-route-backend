@@ -210,6 +210,7 @@ async function main() {
         allGranted: req.body?.allGranted,
         appVersion: req.body?.appVersion,
         device: req.body?.device,
+        accountEmail: req.body?.accountEmail || req.body?.email,
       });
       res.json(result);
     } catch (err) {
@@ -244,6 +245,7 @@ async function main() {
           permissions: req.body?.permissions,
           allGranted: req.body?.allGranted,
           device: req.body?.device,
+          accountEmail: req.body?.accountEmail || req.body?.email,
         }),
       );
       res.json(balance);

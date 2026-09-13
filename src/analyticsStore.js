@@ -32,6 +32,13 @@ function clip(s, max = 48) {
   return t.slice(0, max);
 }
 
+function normalizeEmail(raw) {
+  const t = String(raw || "").trim().toLowerCase();
+  if (!t || t.length > 120) return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) return null;
+  return t;
+}
+
 /** manufacturer / brand / model / android from app ping. */
 function normalizeDeviceInfo(raw) {
   const src =
@@ -100,6 +107,7 @@ function summarize(state, now = Date.now()) {
         permissions: d.permissions || null,
         deviceInfo: info,
         deviceLabel: deviceLabel(info),
+        accountEmail: d.accountEmail || null,
         inactiveDays: Math.floor(
           (now - Number(d.lastSeenMs || d.firstSeenMs || now)) / (24 * 60 * 60 * 1000),
         ),
@@ -130,6 +138,7 @@ function applyPing(state, payload) {
   const info =
     normalizeDeviceInfo(payload.device) ||
     normalizeDeviceInfo(payload);
+  const accountEmail = normalizeEmail(payload.accountEmail || payload.email);
 
   let device = state.devices[id];
   if (!device) {
@@ -142,6 +151,7 @@ function applyPing(state, payload) {
       appVersion: null,
       permissions: perms,
       deviceInfo: info,
+      accountEmail: accountEmail,
     };
     state.devices[id] = device;
   }
@@ -149,6 +159,7 @@ function applyPing(state, payload) {
   device.permissions = perms;
   if (payload.appVersion) device.appVersion = String(payload.appVersion).slice(0, 32);
   if (info) device.deviceInfo = info;
+  if (accountEmail) device.accountEmail = accountEmail;
   if (allGranted) {
     if (!device.permissionsOk) {
       device.permissionsOk = true;
@@ -261,8 +272,9 @@ async function createTursoAnalyticsStore(url, authToken) {
       device_info_json TEXT
     )
   `);
-  // Migrate older schemas that lack device_info_json.
+  // Migrate older schemas that lack device_info_json / account_email.
   await client.execute(`ALTER TABLE analytics_devices ADD COLUMN device_info_json TEXT`).catch(() => {});
+  await client.execute(`ALTER TABLE analytics_devices ADD COLUMN account_email TEXT`).catch(() => {});
   await client.execute(
     `INSERT OR IGNORE INTO analytics_meta (key, value) VALUES ('downloads', 0)`,
   );
@@ -294,6 +306,7 @@ async function createTursoAnalyticsStore(url, authToken) {
           battery: Boolean(Number(row.battery)),
         },
         deviceInfo,
+        accountEmail: row.account_email || null,
       };
     }
     return devices;
@@ -325,6 +338,7 @@ async function createTursoAnalyticsStore(url, authToken) {
         normalizeDeviceInfo(payload.device) ||
         normalizeDeviceInfo(payload);
       const infoJson = info ? JSON.stringify(info) : null;
+      const accountEmail = normalizeEmail(payload.accountEmail || payload.email);
 
       const existing = await client.execute({
         sql: `SELECT permissions_ok, permissions_ok_at_ms, first_seen_ms FROM analytics_devices WHERE device_id = ?`,
@@ -354,7 +368,8 @@ async function createTursoAnalyticsStore(url, authToken) {
               location = ?,
               notifications = ?,
               battery = ?,
-              device_info_json = COALESCE(?, device_info_json)
+              device_info_json = COALESCE(?, device_info_json),
+              account_email = COALESCE(?, account_email)
             WHERE device_id = ?
           `,
           args: [
@@ -367,6 +382,7 @@ async function createTursoAnalyticsStore(url, authToken) {
             perms.notifications ? 1 : 0,
             perms.battery ? 1 : 0,
             infoJson,
+            accountEmail,
             id,
           ],
         });
@@ -375,8 +391,9 @@ async function createTursoAnalyticsStore(url, authToken) {
           sql: `
             INSERT INTO analytics_devices (
               device_id, first_seen_ms, last_seen_ms, permissions_ok, permissions_ok_at_ms,
-              app_version, accessibility, location, notifications, battery, device_info_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              app_version, accessibility, location, notifications, battery, device_info_json,
+              account_email
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
           args: [
             id,
@@ -390,6 +407,7 @@ async function createTursoAnalyticsStore(url, authToken) {
             perms.notifications ? 1 : 0,
             perms.battery ? 1 : 0,
             infoJson,
+            accountEmail,
           ],
         });
       }
