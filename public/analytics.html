@@ -121,7 +121,8 @@
       <table>
         <thead>
           <tr>
-            <th>Device</th>
+            <th>Appareil</th>
+            <th>Device ID</th>
             <th>Permissions</th>
             <th>Version</th>
             <th>1er / dernier ping</th>
@@ -129,7 +130,7 @@
           </tr>
         </thead>
         <tbody id="rows">
-          <tr><td colspan="5">…</td></tr>
+          <tr><td colspan="6">…</td></tr>
         </tbody>
       </table>
     </div>
@@ -198,13 +199,13 @@
       const j = await res.json().catch(() => ({}));
       if (!res.ok) {
         msg.textContent = j.error || ("HTTP " + res.status);
-        rows.innerHTML = '<tr><td colspan="5">Erreur</td></tr>';
+        rows.innerHTML = '<tr><td colspan="6">Erreur</td></tr>';
         return;
       }
       renderStats(j);
       const items = j.devices || [];
       if (!items.length) {
-        rows.innerHTML = '<tr><td colspan="5">Aucun appareil encore (ouvre l’app ou télécharge l’APK)</td></tr>';
+        rows.innerHTML = '<tr><td colspan="6">Aucun appareil encore (ouvre l’app ou télécharge l’APK)</td></tr>';
         return;
       }
       rows.innerHTML = items.map((d) => {
@@ -215,8 +216,19 @@
           perms.notifications ? "notif" : null,
           perms.battery ? "batt" : null,
         ].filter(Boolean).join(", ") || "—";
+        const info = d.deviceInfo || {};
+        const label = d.deviceLabel || "—";
+        const androidBit = info.android
+          ? `Android ${info.android}${info.sdk != null ? ` (API ${info.sdk})` : ""}`
+          : (info.sdk != null ? `API ${info.sdk}` : "");
         return `
           <tr>
+            <td>
+              <strong>${escapeHtml(label)}</strong>
+              <div style="color:var(--muted);font-size:0.8rem;margin-top:4px">
+                ${escapeHtml(androidBit || "—")}
+              </div>
+            </td>
             <td><code title="${escapeHtml(d.deviceId)}">${escapeHtml(shortId(d.deviceId))}</code></td>
             <td>
               <span class="pill ${d.permissionsOk ? "ok" : "no"}">${d.permissionsOk ? "OK" : "non"}</span>

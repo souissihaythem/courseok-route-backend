@@ -26,6 +26,46 @@ function normalizePerms(p) {
   };
 }
 
+function clip(s, max = 48) {
+  const t = String(s || "").trim();
+  if (!t) return null;
+  return t.slice(0, max);
+}
+
+/** manufacturer / brand / model / android from app ping. */
+function normalizeDeviceInfo(raw) {
+  const src =
+    raw && typeof raw === "object"
+      ? raw
+      : {};
+  // Also accept flat fields on the ping body for older callers.
+  const manufacturer = clip(src.manufacturer);
+  const brand = clip(src.brand);
+  const model = clip(src.model);
+  const android = clip(src.android || src.release, 16);
+  const sdkRaw = src.sdk ?? src.sdkInt;
+  const sdk =
+    sdkRaw == null || sdkRaw === ""
+      ? null
+      : Math.max(0, Math.min(99, Number(sdkRaw) || 0)) || null;
+  if (!manufacturer && !brand && !model && !android && sdk == null) return null;
+  return { manufacturer, brand, model, android, sdk };
+}
+
+function deviceLabel(info) {
+  if (!info) return null;
+  const brand = info.brand || info.manufacturer;
+  const model = info.model;
+  if (brand && model) {
+    const b = brand.toLowerCase();
+    const m = model.toLowerCase();
+    // Avoid "Samsung SM-…" → "Samsung Samsung…" when model already starts with brand
+    if (m.startsWith(b)) return model;
+    return `${brand} ${model}`;
+  }
+  return model || brand || info.manufacturer || null;
+}
+
 function summarize(state, now = Date.now()) {
   const devices = Object.values(state.devices || {});
   let permissionsGranted = 0;
@@ -48,16 +88,23 @@ function summarize(state, now = Date.now()) {
     .slice()
     .sort((a, b) => Number(b.lastSeenMs || 0) - Number(a.lastSeenMs || 0))
     .slice(0, 100)
-    .map((d) => ({
-      deviceId: d.deviceId,
-      firstSeenMs: d.firstSeenMs,
-      lastSeenMs: d.lastSeenMs,
-      permissionsOk: Boolean(d.permissionsOk),
-      permissionsOkAtMs: d.permissionsOkAtMs || null,
-      appVersion: d.appVersion || null,
-      permissions: d.permissions || null,
-      inactiveDays: Math.floor((now - Number(d.lastSeenMs || d.firstSeenMs || now)) / (24 * 60 * 60 * 1000)),
-    }));
+    .map((d) => {
+      const info = d.deviceInfo || null;
+      return {
+        deviceId: d.deviceId,
+        firstSeenMs: d.firstSeenMs,
+        lastSeenMs: d.lastSeenMs,
+        permissionsOk: Boolean(d.permissionsOk),
+        permissionsOkAtMs: d.permissionsOkAtMs || null,
+        appVersion: d.appVersion || null,
+        permissions: d.permissions || null,
+        deviceInfo: info,
+        deviceLabel: deviceLabel(info),
+        inactiveDays: Math.floor(
+          (now - Number(d.lastSeenMs || d.firstSeenMs || now)) / (24 * 60 * 60 * 1000),
+        ),
+      };
+    });
 
   return {
     downloads: Number(state.downloads || 0),
@@ -80,6 +127,9 @@ function applyPing(state, payload) {
   const allGranted =
     payload.allGranted === true ||
     (perms.accessibility && perms.location && perms.notifications && perms.battery);
+  const info =
+    normalizeDeviceInfo(payload.device) ||
+    normalizeDeviceInfo(payload);
 
   let device = state.devices[id];
   if (!device) {
@@ -91,12 +141,14 @@ function applyPing(state, payload) {
       permissionsOkAtMs: null,
       appVersion: null,
       permissions: perms,
+      deviceInfo: info,
     };
     state.devices[id] = device;
   }
   device.lastSeenMs = now;
   device.permissions = perms;
   if (payload.appVersion) device.appVersion = String(payload.appVersion).slice(0, 32);
+  if (info) device.deviceInfo = info;
   if (allGranted) {
     if (!device.permissionsOk) {
       device.permissionsOk = true;
@@ -205,9 +257,12 @@ async function createTursoAnalyticsStore(url, authToken) {
       accessibility INTEGER NOT NULL DEFAULT 0,
       location INTEGER NOT NULL DEFAULT 0,
       notifications INTEGER NOT NULL DEFAULT 0,
-      battery INTEGER NOT NULL DEFAULT 0
+      battery INTEGER NOT NULL DEFAULT 0,
+      device_info_json TEXT
     )
   `);
+  // Migrate older schemas that lack device_info_json.
+  await client.execute(`ALTER TABLE analytics_devices ADD COLUMN device_info_json TEXT`).catch(() => {});
   await client.execute(
     `INSERT OR IGNORE INTO analytics_meta (key, value) VALUES ('downloads', 0)`,
   );
@@ -217,6 +272,14 @@ async function createTursoAnalyticsStore(url, authToken) {
     const devices = {};
     for (const row of rs.rows) {
       const id = String(row.device_id);
+      let deviceInfo = null;
+      if (row.device_info_json) {
+        try {
+          deviceInfo = normalizeDeviceInfo(JSON.parse(String(row.device_info_json)));
+        } catch {
+          deviceInfo = null;
+        }
+      }
       devices[id] = {
         deviceId: id,
         firstSeenMs: Number(row.first_seen_ms),
@@ -230,6 +293,7 @@ async function createTursoAnalyticsStore(url, authToken) {
           notifications: Boolean(Number(row.notifications)),
           battery: Boolean(Number(row.battery)),
         },
+        deviceInfo,
       };
     }
     return devices;
@@ -257,6 +321,10 @@ async function createTursoAnalyticsStore(url, authToken) {
         payload.allGranted === true ||
         (perms.accessibility && perms.location && perms.notifications && perms.battery);
       const appVersion = payload.appVersion ? String(payload.appVersion).slice(0, 32) : null;
+      const info =
+        normalizeDeviceInfo(payload.device) ||
+        normalizeDeviceInfo(payload);
+      const infoJson = info ? JSON.stringify(info) : null;
 
       const existing = await client.execute({
         sql: `SELECT permissions_ok, permissions_ok_at_ms, first_seen_ms FROM analytics_devices WHERE device_id = ?`,
@@ -285,7 +353,8 @@ async function createTursoAnalyticsStore(url, authToken) {
               accessibility = ?,
               location = ?,
               notifications = ?,
-              battery = ?
+              battery = ?,
+              device_info_json = COALESCE(?, device_info_json)
             WHERE device_id = ?
           `,
           args: [
@@ -297,6 +366,7 @@ async function createTursoAnalyticsStore(url, authToken) {
             perms.location ? 1 : 0,
             perms.notifications ? 1 : 0,
             perms.battery ? 1 : 0,
+            infoJson,
             id,
           ],
         });
@@ -305,8 +375,8 @@ async function createTursoAnalyticsStore(url, authToken) {
           sql: `
             INSERT INTO analytics_devices (
               device_id, first_seen_ms, last_seen_ms, permissions_ok, permissions_ok_at_ms,
-              app_version, accessibility, location, notifications, battery
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              app_version, accessibility, location, notifications, battery, device_info_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
           args: [
             id,
@@ -319,6 +389,7 @@ async function createTursoAnalyticsStore(url, authToken) {
             perms.location ? 1 : 0,
             perms.notifications ? 1 : 0,
             perms.battery ? 1 : 0,
+            infoJson,
           ],
         });
       }
