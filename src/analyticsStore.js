@@ -1,14 +1,16 @@
 /**
  * Funnel analytics: APK downloads + device install / permissions / activity.
  * Uninstall is approximated via inactivity (Android cannot notify sideloaded apps).
- * Turso when TURSO_* set, else local JSON under data/.
+ * Turso when TURSO_* set, else Gist when GITHUB_TOKEN+ANALYTICS_GIST_ID, else local JSON.
  */
 const fs = require("fs");
 const path = require("path");
+const { loadGistJson, saveGistJson } = require("./gistStore");
 
 const INACTIVE_MS = 14 * 24 * 60 * 60 * 1000; // 14 days ≈ likely gone
 const ACTIVE_7D_MS = 7 * 24 * 60 * 60 * 1000;
 const ACTIVE_24H_MS = 24 * 60 * 60 * 1000;
+const ANALYTICS_GIST_FILE = "courseok-analytics.json";
 
 function emptyState() {
   return { downloads: 0, devices: {} };
@@ -108,9 +110,10 @@ function applyPing(state, payload) {
   return device;
 }
 
-function createFileAnalyticsStore(dataDir) {
+function createFileAnalyticsStore(dataDir, gistOptions = null) {
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
   const file = path.join(dataDir, "analytics.json");
+  let gistSaveTimer = null;
 
   function read() {
     try {
@@ -125,14 +128,43 @@ function createFileAnalyticsStore(dataDir) {
     }
   }
 
+  function scheduleGistSave(snapshot) {
+    if (!gistOptions?.token || !gistOptions?.gistId) return;
+    if (gistSaveTimer) clearTimeout(gistSaveTimer);
+    gistSaveTimer = setTimeout(() => {
+      saveGistJson(gistOptions.gistId, ANALYTICS_GIST_FILE, gistOptions.token, snapshot).catch(
+        (err) => console.error("analytics gist save failed:", err.message || err),
+      );
+    }, 400);
+  }
+
   function write(state) {
     fs.writeFileSync(file, JSON.stringify(state, null, 2));
+    scheduleGistSave(state);
   }
 
   let state = read();
 
+  async function hydrateFromGist() {
+    if (!gistOptions?.token || !gistOptions?.gistId) return;
+    try {
+      const remote = await loadGistJson(gistOptions.gistId, ANALYTICS_GIST_FILE, gistOptions.token);
+      if (remote && typeof remote === "object") {
+        state = {
+          downloads: Number(remote.downloads || 0),
+          devices: remote.devices && typeof remote.devices === "object" ? remote.devices : {},
+        };
+        fs.writeFileSync(file, JSON.stringify(state, null, 2));
+        console.log("Analytics store hydrated from GitHub Gist");
+      }
+    } catch (err) {
+      console.error("analytics gist hydrate failed:", err.message || err);
+    }
+  }
+
   return {
-    kind: "file",
+    kind: gistOptions?.gistId ? "gist" : "file",
+    hydrateFromGist,
 
     async incrementDownloads() {
       state.downloads = Number(state.downloads || 0) + 1;
@@ -315,12 +347,21 @@ async function createAnalyticsStore(dataDir) {
       console.log("Analytics store: Turso (persistent)");
       return store;
     } catch (err) {
-      console.error("Turso analytics init failed — falling back to file:", err.message);
+      console.error("Turso analytics init failed — falling back:", err.message);
     }
+  }
+
+  const gistId = (process.env.ANALYTICS_GIST_ID || "").trim();
+  const ghToken = (process.env.GITHUB_TOKEN || "").trim();
+  const gistOptions = gistId && ghToken ? { gistId, token: ghToken } : null;
+  if (gistOptions) {
+    console.log("Analytics store: GitHub Gist (persistent)");
   } else {
     console.log("Analytics store: local file");
   }
-  return createFileAnalyticsStore(dataDir);
+  const store = createFileAnalyticsStore(dataDir, gistOptions);
+  if (store.hydrateFromGist) await store.hydrateFromGist();
+  return store;
 }
 
 module.exports = { createAnalyticsStore, INACTIVE_MS };

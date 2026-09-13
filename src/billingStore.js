@@ -1,12 +1,14 @@
 /**
  * Device quota ledger + promo codes + purchases.
- * Turso when TURSO_* set, else local JSON under data/.
+ * Turso when TURSO_* set, else Gist when GITHUB_TOKEN+BILLING_GIST_ID, else local JSON.
  */
 const fs = require("fs");
 const path = require("path");
+const { loadGistJson, saveGistJson } = require("./gistStore");
 
 const FREE_TRIAL_ANALYSES = 500;
 const SEED_PROMO = { code: "IYED", analyses: 1000, enabled: true };
+const BILLING_GIST_FILE = "courseok-billing.json";
 
 function newId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -22,9 +24,11 @@ function balanceOf(device) {
   };
 }
 
-function createFileBillingStore(dataDir) {
+function createFileBillingStore(dataDir, gistOptions = null) {
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
   const file = path.join(dataDir, "billing.json");
+  let gistSaveTimer = null;
+  let gistBusy = Promise.resolve();
 
   function read() {
     try {
@@ -43,11 +47,43 @@ function createFileBillingStore(dataDir) {
     }
   }
 
+  function scheduleGistSave(snapshot) {
+    if (!gistOptions?.token || !gistOptions?.gistId) return;
+    if (gistSaveTimer) clearTimeout(gistSaveTimer);
+    gistSaveTimer = setTimeout(() => {
+      gistBusy = gistBusy
+        .then(() =>
+          saveGistJson(gistOptions.gistId, BILLING_GIST_FILE, gistOptions.token, snapshot),
+        )
+        .catch((err) => console.error("billing gist save failed:", err.message || err));
+    }, 400);
+  }
+
   function write(state) {
     fs.writeFileSync(file, JSON.stringify(state, null, 2));
+    scheduleGistSave(state);
   }
 
   let state = read();
+
+  async function hydrateFromGist() {
+    if (!gistOptions?.token || !gistOptions?.gistId) return;
+    try {
+      const remote = await loadGistJson(gistOptions.gistId, BILLING_GIST_FILE, gistOptions.token);
+      if (remote && typeof remote === "object") {
+        state = {
+          devices: remote.devices && typeof remote.devices === "object" ? remote.devices : {},
+          promos: remote.promos && typeof remote.promos === "object" ? remote.promos : {},
+          redemptions: Array.isArray(remote.redemptions) ? remote.redemptions : [],
+          purchases: Array.isArray(remote.purchases) ? remote.purchases : [],
+        };
+        fs.writeFileSync(file, JSON.stringify(state, null, 2));
+        console.log("Billing store hydrated from GitHub Gist");
+      }
+    } catch (err) {
+      console.error("billing gist hydrate failed:", err.message || err);
+    }
+  }
 
   async function seedPromos() {
     if (!state.promos[SEED_PROMO.code]) {
@@ -62,7 +98,8 @@ function createFileBillingStore(dataDir) {
   }
 
   return {
-    kind: "file",
+    kind: gistOptions?.gistId ? "gist" : "file",
+    hydrateFromGist,
     seedPromos,
 
     async registerDevice(deviceId) {
@@ -538,12 +575,20 @@ async function createBillingStore(dataDir) {
       console.log("Billing store: Turso (persistent)");
       return store;
     } catch (err) {
-      console.error("Turso billing init failed — falling back to file:", err.message);
+      console.error("Turso billing init failed — falling back:", err.message);
     }
+  }
+
+  const gistId = (process.env.BILLING_GIST_ID || "").trim();
+  const ghToken = (process.env.GITHUB_TOKEN || "").trim();
+  const gistOptions = gistId && ghToken ? { gistId, token: ghToken } : null;
+  if (gistOptions) {
+    console.log("Billing store: GitHub Gist (persistent)");
   } else {
     console.log("Billing store: local file");
   }
-  const store = createFileBillingStore(dataDir);
+  const store = createFileBillingStore(dataDir, gistOptions);
+  if (store.hydrateFromGist) await store.hydrateFromGist();
   await store.seedPromos();
   return store;
 }
