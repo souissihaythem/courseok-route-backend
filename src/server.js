@@ -1,9 +1,10 @@
 /**
- * CourseOK route backend — shared Google Routes/Geocode cache (15 min) + billing ledger.
+ * CourseOK route backend — shared Google Routes/Geocode cache (30 days) + billing ledger.
  * Keep secrets in .env / Render env only (never commit).
  *
- * History / billing persistence:
- * - TURSO_DATABASE_URL + TURSO_AUTH_TOKEN → free durable Turso DB (survives Render sleep)
+ * History / billing / analytics / route-cache persistence:
+ * - TURSO_DATABASE_URL + TURSO_AUTH_TOKEN → Turso DB
+ * - else GITHUB_TOKEN + *_GIST_ID → private GitHub Gists (survives Render Free wipe)
  * - else → local data/*.json (wiped on Render Free restart)
  */
 require("dotenv").config();
@@ -12,10 +13,12 @@ const path = require("path");
 const { createHistoryStore, MAX_HISTORY } = require("./historyStore");
 const { createBillingStore, FREE_TRIAL_ANALYSES } = require("./billingStore");
 const { createAnalyticsStore } = require("./analyticsStore");
+const { createRouteCacheStore } = require("./routeCacheStore");
 const { PACKS, getPack } = require("./packs");
 
 const PORT = Number(process.env.PORT || 8787);
-const CACHE_TTL_MS = Number(process.env.CACHE_TTL_MS || 15 * 60 * 1000);
+/** Default 30 days — shared ETA cache across drivers. */
+const CACHE_TTL_MS = Number(process.env.CACHE_TTL_MS || 30 * 24 * 60 * 60 * 1000);
 const GOOGLE_MAPS_API_KEY = (process.env.GOOGLE_MAPS_API_KEY || "").trim();
 const ADMIN_TOKEN = (process.env.ADMIN_TOKEN || "").trim();
 const SUMUP_API_KEY = (process.env.SUMUP_API_KEY || "").trim();
@@ -26,8 +29,8 @@ const APK_DOWNLOAD_URL = (process.env.APK_DOWNLOAD_URL || "").trim();
 const DATA_DIR = path.join(__dirname, "..", "data");
 const SUMUP_API = "https://api.sumup.com/v0.1";
 
-/** @type {Map<string, { durationMinutes: number, distanceMeters: number|null, cachedAtMs: number, pickup: string, dropoff: string }>} */
-const routeCache = new Map();
+/** @type {ReturnType<typeof createRouteCacheStore> | null} */
+let routeCache = null;
 
 const app = express();
 app.use(express.json({ limit: "64kb" }));
@@ -46,9 +49,7 @@ function routeKey(pickup, dropoff) {
 }
 
 function pruneCache(now = Date.now()) {
-  for (const [key, entry] of routeCache.entries()) {
-    if (now - entry.cachedAtMs > CACHE_TTL_MS) routeCache.delete(key);
-  }
+  if (routeCache) routeCache.prune(now);
 }
 
 function requireAdmin(req, res) {
@@ -163,6 +164,8 @@ async function main() {
   const history = await createHistoryStore(DATA_DIR);
   const billing = await createBillingStore(DATA_DIR);
   const analytics = await createAnalyticsStore(DATA_DIR);
+  routeCache = createRouteCacheStore(DATA_DIR, CACHE_TTL_MS);
+  if (routeCache.hydrateFromGist) await routeCache.hydrateFromGist();
 
   app.get("/api/health", async (_req, res) => {
     pruneCache();
@@ -172,12 +175,14 @@ async function main() {
       hasSumUp: Boolean(SUMUP_API_KEY && SUMUP_MERCHANT_CODE),
       hasApkDownload: Boolean(APK_DOWNLOAD_URL),
       freeTrialAnalyses: FREE_TRIAL_ANALYSES,
-      cacheSize: routeCache.size,
+      cacheSize: routeCache.size(),
       historySize: await history.size(),
       historyStore: history.kind,
       billingStore: billing.kind,
       analyticsStore: analytics.kind,
+      routeCacheStore: routeCache.kind,
       cacheTtlMs: CACHE_TTL_MS,
+      cacheTtlDays: Math.round(CACHE_TTL_MS / (24 * 60 * 60 * 1000)),
     });
   });
 
@@ -476,7 +481,7 @@ async function main() {
   });
 
   /**
-   * Shared trip duration: cache hit (15 min) or Google Geocode + Routes.
+   * Shared trip duration: cache hit (30 days) or Google Geocode + Routes.
    * Body: { pickup: string, dropoff: string }
    */
   app.post("/api/trip-duration", async (req, res) => {
@@ -566,9 +571,11 @@ async function main() {
     console.log(`CourseOK route backend on http://0.0.0.0:${PORT}`);
     console.log(`Maps key: ${GOOGLE_MAPS_API_KEY ? "configured" : "MISSING"}`);
     console.log(`SumUp: ${SUMUP_API_KEY && SUMUP_MERCHANT_CODE ? "configured" : "MISSING"}`);
-    console.log(`Cache TTL: ${CACHE_TTL_MS / 1000}s`);
+    console.log(`Cache TTL: ${Math.round(CACHE_TTL_MS / (24 * 60 * 60 * 1000))} day(s)`);
     console.log(`History: ${history.kind}`);
     console.log(`Billing: ${billing.kind}`);
+    console.log(`Analytics: ${analytics.kind}`);
+    console.log(`Route cache: ${routeCache.kind}`);
     if (PUBLIC_BASE_URL) console.log(`Public URL: ${PUBLIC_BASE_URL}`);
   });
 }

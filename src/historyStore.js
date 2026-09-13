@@ -1,16 +1,20 @@
 /**
  * Persistent search history:
- * - Turso (libSQL) when TURSO_DATABASE_URL + TURSO_AUTH_TOKEN are set (survives Render sleep)
- * - Local JSON file otherwise (dev / ephemeral Free disk)
+ * - Turso when TURSO_* set
+ * - GitHub Gist when GITHUB_TOKEN + HISTORY_GIST_ID (survives Render Free wipe)
+ * - Local JSON otherwise (dev)
  */
 const fs = require("fs");
 const path = require("path");
+const { loadGistJson, saveGistJson } = require("./gistStore");
 
 const MAX_HISTORY = 500;
+const HISTORY_GIST_FILE = "courseok-searches.json";
 
-function createFileStore(dataDir) {
+function createFileStore(dataDir, gistOptions = null) {
   const historyFile = path.join(dataDir, "searches.json");
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+  let gistSaveTimer = null;
 
   function read() {
     try {
@@ -22,14 +26,41 @@ function createFileStore(dataDir) {
     }
   }
 
+  function scheduleGistSave(items) {
+    if (!gistOptions?.token || !gistOptions?.gistId) return;
+    if (gistSaveTimer) clearTimeout(gistSaveTimer);
+    gistSaveTimer = setTimeout(() => {
+      saveGistJson(gistOptions.gistId, HISTORY_GIST_FILE, gistOptions.token, items).catch(
+        (err) => console.error("history gist save failed:", err.message || err),
+      );
+    }, 400);
+  }
+
   function write(items) {
-    fs.writeFileSync(historyFile, JSON.stringify(items.slice(0, MAX_HISTORY), null, 2));
+    const capped = items.slice(0, MAX_HISTORY);
+    fs.writeFileSync(historyFile, JSON.stringify(capped, null, 2));
+    scheduleGistSave(capped);
   }
 
   let cache = read();
 
+  async function hydrateFromGist() {
+    if (!gistOptions?.token || !gistOptions?.gistId) return;
+    try {
+      const remote = await loadGistJson(gistOptions.gistId, HISTORY_GIST_FILE, gistOptions.token);
+      if (Array.isArray(remote)) {
+        cache = remote.slice(0, MAX_HISTORY);
+        fs.writeFileSync(historyFile, JSON.stringify(cache, null, 2));
+        console.log("History store hydrated from GitHub Gist (", cache.length, "items)");
+      }
+    } catch (err) {
+      console.error("history gist hydrate failed:", err.message || err);
+    }
+  }
+
   return {
-    kind: "file",
+    kind: gistOptions?.gistId ? "gist" : "file",
+    hydrateFromGist,
     async list(limit = 100) {
       return cache.slice(0, Math.min(limit, MAX_HISTORY));
     },
@@ -91,7 +122,6 @@ async function createTursoStore(url, authToken) {
         sql: `INSERT OR REPLACE INTO searches (id, at_ms, payload) VALUES (?, ?, ?)`,
         args: [id, atMs, payload],
       });
-      // Cap table size.
       await client.execute({
         sql: `
           DELETE FROM searches WHERE id IN (
@@ -107,9 +137,6 @@ async function createTursoStore(url, authToken) {
   };
 }
 
-/**
- * @returns {Promise<{ kind: string, list: Function, size: Function, push: Function, clear: Function }>}
- */
 async function createHistoryStore(dataDir) {
   const url = (process.env.TURSO_DATABASE_URL || "").trim();
   const authToken = (process.env.TURSO_AUTH_TOKEN || "").trim();
@@ -119,12 +146,21 @@ async function createHistoryStore(dataDir) {
       console.log("History store: Turso (persistent)");
       return store;
     } catch (err) {
-      console.error("Turso init failed — falling back to file:", err.message);
+      console.error("Turso init failed — falling back:", err.message);
     }
+  }
+
+  const gistId = (process.env.HISTORY_GIST_ID || "").trim();
+  const ghToken = (process.env.GITHUB_TOKEN || "").trim();
+  const gistOptions = gistId && ghToken ? { gistId, token: ghToken } : null;
+  if (gistOptions) {
+    console.log("History store: GitHub Gist (persistent)");
   } else {
     console.log("History store: local file (ephemeral on Render Free)");
   }
-  return createFileStore(dataDir);
+  const store = createFileStore(dataDir, gistOptions);
+  if (store.hydrateFromGist) await store.hydrateFromGist();
+  return store;
 }
 
 module.exports = { createHistoryStore, MAX_HISTORY };

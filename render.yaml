@@ -12,8 +12,18 @@ services:
       - key: GOOGLE_MAPS_API_KEY
         sync: false
       - key: CACHE_TTL_MS
-        value: "900000"
+        value: "2592000000"
       - key: TURSO_DATABASE_URL
         sync: false
       - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: BILLING_GIST_ID
+        sync: false
+      - key: ANALYTICS_GIST_ID
+        sync: false
+      - key: HISTORY_GIST_ID
+        sync: false
+      - key: ROUTES_GIST_ID
         sync: false
