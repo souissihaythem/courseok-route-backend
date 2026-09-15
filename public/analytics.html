@@ -173,8 +173,10 @@
 
     function renderStats(j) {
       const cards = [
+        { n: j.pageViews, l: "Vues page install", cls: "blue" },
         { n: j.downloads, l: "Téléchargements APK", cls: "blue" },
-        { n: j.installs, l: "Installs (1er ouverture)", cls: "lime" },
+        { n: j.installs, l: "Installs réelles (app ouverte)", cls: "lime" },
+        { n: j.namedDevices, l: "Avec nom d’appareil", cls: "" },
         { n: j.permissionsGranted, l: "Permissions accordées", cls: "lime" },
         { n: j.activeLast24h, l: "Actifs 24 h", cls: "" },
         { n: j.activeLast7d, l: "Actifs 7 j", cls: "" },
@@ -188,10 +190,12 @@
         </div>
       `).join("");
       note.textContent =
-        "« Probables désinstallés » = avaient les permissions, puis aucun ping depuis " +
+        "Funnel : vues page → clic APK → 1ère ouverture app → permissions. " +
+        "« Installs » = appareils réels (IDs smoke/test exclus). " +
+        "Sans marque/modèle = ancienne app ou ping billing seul. " +
+        "Probables désinstallés = permissions OK puis silence > " +
         (j.inactiveAfterDays || 14) +
-        " jours (proxy — Android ne notifie pas la désinstall hors Play Store). " +
-        "Téléchargements = clics sur /downloads/CourseOK-latest.apk.";
+        " j.";
     }
 
     async function load() {

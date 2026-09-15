@@ -13,7 +13,7 @@ const ACTIVE_24H_MS = 24 * 60 * 60 * 1000;
 const ANALYTICS_GIST_FILE = "courseok-analytics.json";
 
 function emptyState() {
-  return { downloads: 0, devices: {} };
+  return { downloads: 0, pageViews: 0, devices: {} };
 }
 
 function normalizePerms(p) {
@@ -73,15 +73,43 @@ function deviceLabel(info) {
   return model || brand || info.manufacturer || null;
 }
 
+/** Smoke tests / fake ANDROID_IDs must not inflate "installs". */
+function isTestDeviceId(id) {
+  const s = String(id || "").trim();
+  if (!s) return true;
+  if (/^smoke[-_]/i.test(s)) return true;
+  if (/^test[-_]/i.test(s)) return true;
+  if (/^dummy/i.test(s)) return true;
+  if (/^unknown$/i.test(s)) return true;
+  // Common placeholder used in manual API checks
+  if (s === "8765432101234567") return true;
+  if (/^0{8,}$/.test(s) || /^1{8,}$/.test(s)) return true;
+  return false;
+}
+
+function isRealInstall(d) {
+  if (!d || isTestDeviceId(d.deviceId)) return false;
+  // Real app open usually sends version and/or manufacturer.
+  if (d.appVersion) return true;
+  if (d.deviceInfo && (d.deviceInfo.model || d.deviceInfo.manufacturer || d.deviceInfo.brand)) {
+    return true;
+  }
+  // Long hex-like ANDROID_ID without metadata still counts as a device open.
+  return /^[a-f0-9]{14,16}$/i.test(String(d.deviceId || ""));
+}
+
 function summarize(state, now = Date.now()) {
-  const devices = Object.values(state.devices || {});
+  const allDevices = Object.values(state.devices || {});
+  const devices = allDevices.filter((d) => !isTestDeviceId(d.deviceId));
+  const realDevices = devices.filter(isRealInstall);
   let permissionsGranted = 0;
   let activeLast24h = 0;
   let activeLast7d = 0;
   let likelyUninstalled = 0;
   let installedNeverPerms = 0;
+  let namedDevices = 0;
 
-  for (const d of devices) {
+  for (const d of realDevices) {
     const last = Number(d.lastSeenMs || d.firstSeenMs || 0);
     const age = now - last;
     if (d.permissionsOk) permissionsGranted += 1;
@@ -89,9 +117,10 @@ function summarize(state, now = Date.now()) {
     if (age <= ACTIVE_7D_MS) activeLast7d += 1;
     if (d.permissionsOk && age > INACTIVE_MS) likelyUninstalled += 1;
     if (!d.permissionsOk && age > INACTIVE_MS) installedNeverPerms += 1;
+    if (deviceLabel(d.deviceInfo)) namedDevices += 1;
   }
 
-  const recent = devices
+  const recent = realDevices
     .slice()
     .sort((a, b) => Number(b.lastSeenMs || 0) - Number(a.lastSeenMs || 0))
     .slice(0, 100)
@@ -106,7 +135,7 @@ function summarize(state, now = Date.now()) {
         appVersion: d.appVersion || null,
         permissions: d.permissions || null,
         deviceInfo: info,
-        deviceLabel: deviceLabel(info),
+        deviceLabel: deviceLabel(info) || (d.appVersion ? `Appareil · v${d.appVersion}` : "Appareil (modèle inconnu)"),
         accountEmail: d.accountEmail || null,
         inactiveDays: Math.floor(
           (now - Number(d.lastSeenMs || d.firstSeenMs || now)) / (24 * 60 * 60 * 1000),
@@ -116,7 +145,11 @@ function summarize(state, now = Date.now()) {
 
   return {
     downloads: Number(state.downloads || 0),
-    installs: devices.length,
+    pageViews: Number(state.pageViews || 0),
+    /** Unique real devices that opened the app (excludes smoke/test IDs). */
+    installs: realDevices.length,
+    installsRaw: allDevices.length,
+    namedDevices,
     permissionsGranted,
     activeLast24h,
     activeLast7d,
@@ -182,10 +215,11 @@ function createFileAnalyticsStore(dataDir, gistOptions = null) {
     try {
       if (!fs.existsSync(file)) return emptyState();
       const raw = JSON.parse(fs.readFileSync(file, "utf8"));
-      return {
-        downloads: Number(raw.downloads || 0),
-        devices: raw.devices && typeof raw.devices === "object" ? raw.devices : {},
-      };
+        return {
+          downloads: Number(raw.downloads || 0),
+          pageViews: Number(raw.pageViews || 0),
+          devices: raw.devices && typeof raw.devices === "object" ? raw.devices : {},
+        };
     } catch {
       return emptyState();
     }
@@ -213,10 +247,11 @@ function createFileAnalyticsStore(dataDir, gistOptions = null) {
     try {
       const remote = await loadGistJson(gistOptions.gistId, ANALYTICS_GIST_FILE, gistOptions.token);
       if (remote && typeof remote === "object") {
-        state = {
-          downloads: Number(remote.downloads || 0),
-          devices: remote.devices && typeof remote.devices === "object" ? remote.devices : {},
-        };
+          state = {
+            downloads: Number(remote.downloads || 0),
+            pageViews: Number(remote.pageViews || 0),
+            devices: remote.devices && typeof remote.devices === "object" ? remote.devices : {},
+          };
         fs.writeFileSync(file, JSON.stringify(state, null, 2));
         console.log("Analytics store hydrated from GitHub Gist");
       }
@@ -233,6 +268,12 @@ function createFileAnalyticsStore(dataDir, gistOptions = null) {
       state.downloads = Number(state.downloads || 0) + 1;
       write(state);
       return state.downloads;
+    },
+
+    async incrementPageViews() {
+      state.pageViews = Number(state.pageViews || 0) + 1;
+      write(state);
+      return state.pageViews;
     },
 
     async recordPing(payload) {
@@ -278,6 +319,9 @@ async function createTursoAnalyticsStore(url, authToken) {
   await client.execute(
     `INSERT OR IGNORE INTO analytics_meta (key, value) VALUES ('downloads', 0)`,
   );
+  await client.execute(
+    `INSERT OR IGNORE INTO analytics_meta (key, value) VALUES ('pageViews', 0)`,
+  );
 
   async function loadAllDevices() {
     const rs = await client.execute(`SELECT * FROM analytics_devices`);
@@ -321,6 +365,19 @@ async function createTursoAnalyticsStore(url, authToken) {
       );
       const rs = await client.execute(
         `SELECT value FROM analytics_meta WHERE key = 'downloads'`,
+      );
+      return Number(rs.rows[0]?.value || 0);
+    },
+
+    async incrementPageViews() {
+      await client.execute(
+        `INSERT OR IGNORE INTO analytics_meta (key, value) VALUES ('pageViews', 0)`,
+      );
+      await client.execute(
+        `UPDATE analytics_meta SET value = value + 1 WHERE key = 'pageViews'`,
+      );
+      const rs = await client.execute(
+        `SELECT value FROM analytics_meta WHERE key = 'pageViews'`,
       );
       return Number(rs.rows[0]?.value || 0);
     },
@@ -418,9 +475,13 @@ async function createTursoAnalyticsStore(url, authToken) {
       const dl = await client.execute(
         `SELECT value FROM analytics_meta WHERE key = 'downloads'`,
       );
+      const pv = await client.execute(
+        `SELECT value FROM analytics_meta WHERE key = 'pageViews'`,
+      );
       const devices = await loadAllDevices();
       return summarize({
         downloads: Number(dl.rows[0]?.value || 0),
+        pageViews: Number(pv.rows[0]?.value || 0),
         devices,
       });
     },
@@ -453,4 +514,10 @@ async function createAnalyticsStore(dataDir) {
   return store;
 }
 
-module.exports = { createAnalyticsStore, INACTIVE_MS };
+module.exports = {
+  createAnalyticsStore,
+  INACTIVE_MS,
+  isTestDeviceId,
+  isRealInstall,
+  summarize,
+};

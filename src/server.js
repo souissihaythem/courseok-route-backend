@@ -187,16 +187,35 @@ async function main() {
   });
 
   /** Neutral public APK link (hides upstream hosting URL from the landing page). */
-  app.get(["/downloads/CourseOK-latest.apk", "/api/download-apk"], async (_req, res) => {
+  app.get(["/downloads/CourseOK-latest.apk", "/api/download-apk"], async (req, res) => {
     if (!APK_DOWNLOAD_URL) {
       return res.status(404).type("text").send("APK not configured");
     }
-    try {
-      await analytics.incrementDownloads();
-    } catch (err) {
-      console.error("analytics download count failed:", err.message || err);
+    // HEAD / prefetch / bots must not inflate the funnel.
+    const method = String(req.method || "GET").toUpperCase();
+    const ua = String(req.get("user-agent") || "").toLowerCase();
+    const isBot =
+      /bot|spider|crawler|preview|facebookexternalhit|whatsapp|telegram|slack|discord|curl|wget|python-requests|httpclient/i.test(
+        ua,
+      );
+    if (method === "GET" && !isBot) {
+      try {
+        await analytics.incrementDownloads();
+      } catch (err) {
+        console.error("analytics download count failed:", err.message || err);
+      }
     }
     res.redirect(302, APK_DOWNLOAD_URL);
+  });
+
+  /** Landing page open (install funnel step before APK click). */
+  app.post("/api/analytics/pageview", async (req, res) => {
+    try {
+      const n = await analytics.incrementPageViews();
+      res.json({ ok: true, pageViews: n });
+    } catch (err) {
+      res.status(500).json({ error: String(err.message || err) });
+    }
   });
 
   /** App heartbeat: install + permissions snapshot (no auth). */

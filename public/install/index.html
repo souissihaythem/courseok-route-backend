@@ -167,10 +167,18 @@
   <script>
     (function () {
       var url = window.COURSEOK_APK_URL;
-      if (!url) return;
-      document.querySelectorAll("a.btn-primary").forEach(function (btn) {
-        btn.href = url;
-      });
+      if (url) {
+        document.querySelectorAll("a.btn-primary").forEach(function (btn) {
+          btn.href = url;
+        });
+      }
+      // Funnel: page open (once per tab session).
+      try {
+        if (!sessionStorage.getItem("courseok_pv")) {
+          sessionStorage.setItem("courseok_pv", "1");
+          fetch("/api/analytics/pageview", { method: "POST", keepalive: true }).catch(function () {});
+        }
+      } catch (e) {}
     })();
   </script>
 </body>
