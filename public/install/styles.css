@@ -519,6 +519,12 @@ h1 em {
   }
   .help-card h2 { font-size: 1.25rem; }
   .help-card .btn-secondary { width: 100%; }
+  .help-actions { flex-direction: column; }
+  .steps-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .install-steps { margin-top: 20px; }
 
   .why { padding: 40px var(--pad) 28px; }
   .why h2 { font-size: clamp(1.7rem, 7vw, 2.2rem); }

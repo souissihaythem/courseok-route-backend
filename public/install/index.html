@@ -43,22 +43,21 @@
           <a class="btn-primary" id="downloadBtn" href="https://courseok-route-backend.onrender.com/downloads/CourseOK-latest.apk">
             Télécharger l’app (.apk)
           </a>
-          <p class="meta">Android 9+ · <strong>Aucune version iOS</strong> · v0.5.38</p>
+          <p class="meta">Android 9+ · <strong>Aucune version iOS</strong> · v0.5.37</p>
         </div>
 
         <aside class="warn">
-          Le fichier n’est pas sur le Play Store : Android affichera
-          <strong>« source inconnue »</strong>. C’est normal pour une bêta —
-          appuyez sur <strong>Installer quand même</strong>.
+          <strong>Important :</strong> l’app n’est pas sur le Play Store.
+          Android affiche « source inconnue » / Play Protect —
+          c’est <strong>normal</strong>. Il faut appuyer sur
+          <strong>Installer quand même</strong>, sinon le téléchargement
+          ne devient jamais une installation.
           <br /><br />
-          Sur Android 13+ / Samsung, active ensuite la lecture d’écran ainsi :
-          Accessibilité → touche CourseOK (même grisé) → message « Paramètre restreint »
-          → Infos de l’app → <strong>⋮ Autoriser les paramètres restreints</strong>
-          → réactive CourseOK dans Accessibilité.
+          Guide illustré (4 étapes + captures) :
+          <a href="aide-installation.html" style="color:inherit;font-weight:700">comment installer malgré le blocage Android</a>.
           <br /><br />
-          Guide détaillé :
-          <a href="aide-lecture-ecran.html" style="color:inherit;font-weight:700">comment activer la lecture d’écran</a>
-          (aucune app ne peut le faire automatiquement — c’est une règle Android).
+          Ensuite, active la lecture d’écran :
+          <a href="aide-lecture-ecran.html" style="color:inherit;font-weight:700">guide Samsung / Xiaomi</a>.
         </aside>
       </div>
 
@@ -113,13 +112,45 @@
       </div>
     </section>
 
+    <section class="install-steps" id="installer">
+      <p class="eyebrow">Après le téléchargement</p>
+      <h2>Android bloque ? Appuie ici.</h2>
+      <p class="why-sub" style="margin-bottom:22px">
+        Sans ces clics, le .apk reste dans Téléchargements et l’app n’apparaît jamais.
+      </p>
+
+      <div class="steps-grid">
+        <article class="step-card">
+          <span class="step-badge">1</span>
+          <h3>Ouvre le fichier .apk</h3>
+          <p>Depuis la notification Chrome / Fichiers.</p>
+        </article>
+        <article class="step-card">
+          <span class="step-badge">2</span>
+          <h3>Autorise la source</h3>
+          <p>Paramètres → active « Autoriser depuis cette source ».</p>
+          <img src="img/step2-toggle-autoriser.png" alt="Activer Autoriser depuis cette source" loading="lazy" />
+        </article>
+        <article class="step-card highlight">
+          <span class="step-badge">3</span>
+          <h3>Installer quand même</h3>
+          <p>Le bouton vert — c’est lui qui valide l’install.</p>
+          <img src="img/step4-bouton-installer.png" alt="Bouton Installer quand même" loading="lazy" />
+          <a class="btn-secondary" href="aide-installation.html">Voir le guide complet</a>
+        </article>
+      </div>
+    </section>
+
     <section class="help">
       <div class="help-card">
         <h2>Besoin d’aide pour l’installation ?</h2>
-        <p>On vous accompagne pas à pas pour installer CourseOK sur Android.</p>
-        <a class="btn-secondary" href="mailto:dupontalen@gmail.com?subject=Aide%20installation%20CourseOK">
-          Contacter le support
-        </a>
+        <p>Bloqué sur « source inconnue » ou Play Protect ? Suis le guide illustré, ou écris-nous.</p>
+        <div class="help-actions">
+          <a class="btn-secondary" href="aide-installation.html">Guide source inconnue</a>
+          <a class="btn-secondary" href="mailto:dupontalen@gmail.com?subject=Aide%20installation%20CourseOK">
+            Contacter le support
+          </a>
+        </div>
       </div>
     </section>
 
@@ -161,7 +192,7 @@
 
   <footer class="foot">
     <span>© CourseOK</span>
-    <span id="versionLabel">APK v0.5.38</span>
+    <span id="versionLabel">APK v0.5.37</span>
   </footer>
 
   <script>
