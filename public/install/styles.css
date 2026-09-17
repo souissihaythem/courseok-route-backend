@@ -320,6 +320,74 @@ h1 em {
   white-space: nowrap;
 }
 
+.install-steps {
+  max-width: var(--max);
+  margin: 36px auto 0;
+  padding: 0 var(--pad);
+}
+.install-steps h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+}
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.step-card {
+  background: var(--surface);
+  border: 1px solid var(--stroke);
+  border-radius: 20px;
+  padding: 18px;
+}
+.step-card.highlight {
+  border-color: rgba(184, 242, 44, 0.45);
+  box-shadow: 0 0 0 1px rgba(184, 242, 44, 0.15);
+}
+.step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--lime);
+  color: #101010;
+  font-weight: 800;
+  font-family: var(--font-display);
+  margin-bottom: 10px;
+}
+.step-card h3 {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+}
+.step-card p {
+  margin: 0 0 12px;
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 0.95rem;
+}
+.step-card img {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  margin-bottom: 12px;
+  display: block;
+  background: #000;
+}
+.step-card .btn-secondary {
+  width: 100%;
+  text-align: center;
+}
+.help-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
 .help {
   max-width: var(--max);
   margin: 24px auto 0;
