@@ -27,6 +27,10 @@ const SUMUP_MERCHANT_CODE = (process.env.SUMUP_MERCHANT_CODE || "").trim();
 const SUMUP_WEBHOOK_SECRET = (process.env.SUMUP_WEBHOOK_SECRET || "").trim();
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || "").trim().replace(/\/$/, "");
 const APK_DOWNLOAD_URL = (process.env.APK_DOWNLOAD_URL || "").trim();
+/** Ships with repo; preferred over a stale Render env URL pinned to an old release. */
+const DEFAULT_APK_DOWNLOAD_URL =
+  "https://raw.githubusercontent.com/souissihaythem/courseok-route-backend/main/apk/CourseOK-latest.apk";
+const EFFECTIVE_APK_DOWNLOAD_URL = DEFAULT_APK_DOWNLOAD_URL || APK_DOWNLOAD_URL;
 const DATA_DIR = path.join(__dirname, "..", "data");
 const SUMUP_API = "https://api.sumup.com/v0.1";
 
@@ -175,7 +179,7 @@ async function main() {
       ok: true,
       hasMapsKey: Boolean(GOOGLE_MAPS_API_KEY),
       hasSumUp: Boolean(SUMUP_API_KEY && SUMUP_MERCHANT_CODE),
-      hasApkDownload: Boolean(APK_DOWNLOAD_URL) || require("fs").existsSync(path.join(__dirname, "..", "apk", "CourseOK-latest.apk")),
+      hasApkDownload: Boolean(EFFECTIVE_APK_DOWNLOAD_URL) || require("fs").existsSync(path.join(__dirname, "..", "apk", "CourseOK-latest.apk")),
       freeTrialAnalyses: FREE_TRIAL_ANALYSES,
       cacheSize: routeCache.size(),
       historySize: await history.size(),
@@ -223,7 +227,7 @@ async function main() {
   app.get(["/downloads/CourseOK-latest.apk", "/api/download-apk"], async (req, res) => {
     const localApk = path.join(__dirname, "..", "apk", "CourseOK-latest.apk");
     const hasLocal = require("fs").existsSync(localApk);
-    if (!hasLocal && !APK_DOWNLOAD_URL) {
+    if (!hasLocal && !EFFECTIVE_APK_DOWNLOAD_URL) {
       return res.status(404).type("text").send("APK not configured");
     }
     // HEAD / prefetch / bots must not inflate the funnel.
@@ -243,7 +247,7 @@ async function main() {
     if (hasLocal) {
       return res.download(localApk, "CourseOK-latest.apk");
     }
-    res.redirect(302, APK_DOWNLOAD_URL);
+    res.redirect(302, EFFECTIVE_APK_DOWNLOAD_URL);
   });
 
   /** Landing page open (install funnel step before APK click). */
