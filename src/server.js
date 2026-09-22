@@ -29,7 +29,7 @@ const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || "").trim().replace(/\/$/
 const APK_DOWNLOAD_URL = (process.env.APK_DOWNLOAD_URL || "").trim();
 /** Ships with repo; preferred over a stale Render env URL pinned to an old release. */
 const DEFAULT_APK_DOWNLOAD_URL =
-  "https://github.com/souissihaythem/courseok-route-backend/releases/download/v0.5.41/CourseOK-0.5.41-56-20260922.apk";
+  "https://raw.githubusercontent.com/souissihaythem/courseok-route-backend/main/apk/CourseOK-latest.apk";
 const EFFECTIVE_APK_DOWNLOAD_URL = DEFAULT_APK_DOWNLOAD_URL || APK_DOWNLOAD_URL;
 const DATA_DIR = path.join(__dirname, "..", "data");
 const SUMUP_API = "https://api.sumup.com/v0.1";
