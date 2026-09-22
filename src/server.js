@@ -27,10 +27,15 @@ const SUMUP_MERCHANT_CODE = (process.env.SUMUP_MERCHANT_CODE || "").trim();
 const SUMUP_WEBHOOK_SECRET = (process.env.SUMUP_WEBHOOK_SECRET || "").trim();
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || "").trim().replace(/\/$/, "");
 const APK_DOWNLOAD_URL = (process.env.APK_DOWNLOAD_URL || "").trim();
-/** Ships with repo; preferred over a stale Render env URL pinned to an old release. */
+/** Canonical APK — always prefer this over a stale Render env URL. */
 const DEFAULT_APK_DOWNLOAD_URL =
   "https://github.com/souissihaythem/courseok-route-backend/releases/download/v0.5.42/CourseOK-0.5.42-57-20260922.apk";
 const EFFECTIVE_APK_DOWNLOAD_URL = DEFAULT_APK_DOWNLOAD_URL || APK_DOWNLOAD_URL;
+/** Install marketing page hosted on GitHub Pages (updates on every git push). */
+const INSTALL_MIRROR_URL = (
+  process.env.INSTALL_MIRROR_URL ||
+  "https://souissihaythem.github.io/courseok-route-backend/"
+).trim().replace(/\/?$/, "/");
 const DATA_DIR = path.join(__dirname, "..", "data");
 const SUMUP_API = "https://api.sumup.com/v0.1";
 
@@ -39,6 +44,15 @@ let routeCache = null;
 
 const app = express();
 app.use(express.json({ limit: "64kb" }));
+
+// Install site: redirect to GitHub Pages so version/APK text updates without waiting for Render.
+app.get(["/install", "/install/", "/install/index.html"], (_req, res) => {
+  if (INSTALL_MIRROR_URL) {
+    return res.redirect(302, INSTALL_MIRROR_URL);
+  }
+  return res.redirect(302, "/install/index.html");
+});
+
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 function normalizeAddress(s) {

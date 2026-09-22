@@ -1,1 +1,1 @@
-APK hosted as GitHub Release — see /downloads/CourseOK-latest.apk
+APKs are published as GitHub Releases (see public/install/version.json).

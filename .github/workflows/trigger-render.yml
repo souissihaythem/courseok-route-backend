@@ -1,0 +1,22 @@
+name: Trigger Render deploy
+
+# Requires repo secret RENDER_DEPLOY_HOOK (Render → Service → Settings → Deploy Hook).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Render Deploy Hook
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "RENDER_DEPLOY_HOOK secret not set — skip (install site uses GitHub Pages)."
+            exit 0
+          fi
+          curl -fsS -X POST "$HOOK"
+          echo "Render deploy triggered."

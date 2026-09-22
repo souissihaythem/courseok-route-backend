@@ -40,7 +40,7 @@
         </p>
 
         <div class="cta-row">
-          <a class="btn-primary" id="downloadBtn" href="https://courseok-route-backend.onrender.com/downloads/CourseOK-latest.apk">
+          <a class="btn-primary" id="downloadBtn" href="https://github.com/souissihaythem/courseok-route-backend/releases/download/v0.5.42/CourseOK-0.5.42-57-20260922.apk">
             Télécharger l’app (.apk)
           </a>
           <p class="meta">Android 9+ · <strong>Aucune version iOS</strong> · v0.5.42</p>
@@ -186,7 +186,7 @@
   </main>
 
   <div class="mobile-cta">
-    <a class="btn-primary" href="https://courseok-route-backend.onrender.com/downloads/CourseOK-latest.apk">
+    <a class="btn-primary" href="https://github.com/souissihaythem/courseok-route-backend/releases/download/v0.5.42/CourseOK-0.5.42-57-20260922.apk">
       Télécharger l’app (.apk)
     </a>
   </div>
@@ -198,13 +198,25 @@
 
   <script>
     (function () {
-      var url = window.COURSEOK_APK_URL;
-      if (url) {
+      var fallbackUrl = "https://github.com/souissihaythem/courseok-route-backend/releases/download/v0.5.42/CourseOK-0.5.42-57-20260922.apk";
+      var fallbackVer = "0.5.42";
+      function apply(url, ver) {
         document.querySelectorAll("a.btn-primary").forEach(function (btn) {
           btn.href = url;
         });
+        var label = document.getElementById("versionLabel");
+        if (label) label.textContent = "APK v" + ver;
+        document.querySelectorAll("p.meta").forEach(function (el) {
+          el.innerHTML = el.innerHTML.replace(/v0\.\d+\.\d+/g, "v" + ver);
+        });
       }
-      // Funnel: page open (once per tab session).
+      apply(window.COURSEOK_APK_URL || fallbackUrl, fallbackVer);
+      fetch("https://cdn.jsdelivr.net/gh/souissihaythem/courseok-route-backend@main/public/install/version.json?t=" + Date.now())
+        .then(function (r) { return r.json(); })
+        .then(function (v) {
+          if (v && v.apkUrl && v.version) apply(v.apkUrl, v.version);
+        })
+        .catch(function () {});
       try {
         if (!sessionStorage.getItem("courseok_pv")) {
           sessionStorage.setItem("courseok_pv", "1");
