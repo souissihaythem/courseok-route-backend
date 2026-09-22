@@ -14,6 +14,7 @@ const { createHistoryStore, MAX_HISTORY } = require("./historyStore");
 const { createBillingStore, FREE_TRIAL_ANALYSES } = require("./billingStore");
 const { createAnalyticsStore } = require("./analyticsStore");
 const { createRouteCacheStore } = require("./routeCacheStore");
+const { createFeatureFlagsStore } = require("./featureFlagsStore");
 const { PACKS, getPack } = require("./packs");
 
 const PORT = Number(process.env.PORT || 8787);
@@ -164,6 +165,7 @@ async function main() {
   const history = await createHistoryStore(DATA_DIR);
   const billing = await createBillingStore(DATA_DIR);
   const analytics = await createAnalyticsStore(DATA_DIR);
+  const featureFlags = await createFeatureFlagsStore(DATA_DIR).init();
   routeCache = createRouteCacheStore(DATA_DIR, CACHE_TTL_MS);
   if (routeCache.hydrateFromGist) await routeCache.hydrateFromGist();
 
@@ -173,22 +175,55 @@ async function main() {
       ok: true,
       hasMapsKey: Boolean(GOOGLE_MAPS_API_KEY),
       hasSumUp: Boolean(SUMUP_API_KEY && SUMUP_MERCHANT_CODE),
-      hasApkDownload: Boolean(APK_DOWNLOAD_URL),
+      hasApkDownload: Boolean(APK_DOWNLOAD_URL) || require("fs").existsSync(path.join(__dirname, "..", "apk", "CourseOK-latest.apk")),
       freeTrialAnalyses: FREE_TRIAL_ANALYSES,
       cacheSize: routeCache.size(),
       historySize: await history.size(),
       historyStore: history.kind,
       billingStore: billing.kind,
       analyticsStore: analytics.kind,
+      featureFlagsStore: featureFlags.kind,
       routeCacheStore: routeCache.kind,
       cacheTtlMs: CACHE_TTL_MS,
       cacheTtlDays: Math.round(CACHE_TTL_MS / (24 * 60 * 60 * 1000)),
     });
   });
 
+  /** Public feature flags for the Android app (no auth). */
+  app.get("/api/features", async (_req, res) => {
+    try {
+      res.json(await featureFlags.get());
+    } catch (err) {
+      res.status(500).json({ error: String(err.message || err) });
+    }
+  });
+
+  app.get("/api/admin/features", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      res.json(await featureFlags.get());
+    } catch (err) {
+      res.status(500).json({ error: String(err.message || err) });
+    }
+  });
+
+  app.post("/api/admin/features", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const updated = await featureFlags.set({
+        rejectBadTrip: req.body?.rejectBadTrip,
+      });
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ error: String(err.message || err) });
+    }
+  });
+
   /** Neutral public APK link (hides upstream hosting URL from the landing page). */
   app.get(["/downloads/CourseOK-latest.apk", "/api/download-apk"], async (req, res) => {
-    if (!APK_DOWNLOAD_URL) {
+    const localApk = path.join(__dirname, "..", "apk", "CourseOK-latest.apk");
+    const hasLocal = require("fs").existsSync(localApk);
+    if (!hasLocal && !APK_DOWNLOAD_URL) {
       return res.status(404).type("text").send("APK not configured");
     }
     // HEAD / prefetch / bots must not inflate the funnel.
@@ -204,6 +239,9 @@ async function main() {
       } catch (err) {
         console.error("analytics download count failed:", err.message || err);
       }
+    }
+    if (hasLocal) {
+      return res.download(localApk, "CourseOK-latest.apk");
     }
     res.redirect(302, APK_DOWNLOAD_URL);
   });

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CourseOK — Feature flags</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #1a1f29;
+      --text: #e8ecf4;
+      --muted: #9aa3b5;
+      --lime: #b8f22c;
+      --border: #2a3140;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1c2740, var(--bg));
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header, main { max-width: 900px; margin: 0 auto; padding: 24px; }
+    h1 { margin: 0 0 8px; font-size: 1.5rem; }
+    .sub { color: var(--muted); }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+    input, button {
+      font: inherit;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      padding: 10px 14px;
+    }
+    button { cursor: pointer; }
+    button.primary { background: var(--lime); color: #111; border: none; font-weight: 600; }
+    .msg { margin-top: 10px; color: var(--muted); white-space: pre-wrap; }
+    a { color: var(--lime); }
+    label.flag {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 0;
+      font-size: 1.05rem;
+    }
+    label.flag input { width: 20px; height: 20px; }
+    .note { color: var(--muted); font-size: 0.9rem; line-height: 1.45; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Feature flags</h1>
+    <p class="sub">
+      Contrôle remote des fonctionnalités app.
+      <a href="/promos.html">Promo codes</a> ·
+      <a href="/analytics.html">Analytics</a> ·
+      <a href="/">Cache trajets</a>
+    </p>
+  </header>
+  <main>
+    <div class="card">
+      <div class="row">
+        <input id="adminToken" type="password" placeholder="ADMIN_TOKEN" style="flex:1;min-width:180px" />
+        <button class="primary" id="saveToken">Mémoriser</button>
+        <button id="refreshBtn">Actualiser</button>
+      </div>
+      <pre class="msg" id="msg"></pre>
+    </div>
+
+    <div class="card">
+      <label class="flag">
+        <input id="rejectBadTrip" type="checkbox" />
+        <span><strong>rejectBadTrip</strong> — auto-refus courses rouges / arrêts (Uber &amp; Bolt)</span>
+      </label>
+      <p class="note">
+        Si activé : l’app affiche les toggles « Refuser courses rouges Uber/Bolt ».
+        Si désactivé : les toggles disparaissent et aucun appui automatique n’est déclenché.
+      </p>
+      <div class="row" style="margin-top:16px">
+        <button class="primary" id="saveBtn">Enregistrer</button>
+      </div>
+    </div>
+  </main>
+  <script>
+    const msg = document.getElementById("msg");
+    const tokenInput = document.getElementById("adminToken");
+    tokenInput.value = localStorage.getItem("courseok_admin_token") || "";
+
+    function headers() {
+      const h = { "Content-Type": "application/json" };
+      const t = tokenInput.value.trim();
+      if (t) h["x-admin-token"] = t;
+      return h;
+    }
+
+    document.getElementById("saveToken").onclick = () => {
+      localStorage.setItem("courseok_admin_token", tokenInput.value.trim());
+      msg.textContent = "Token mémorisé.";
+    };
+
+    async function refresh() {
+      msg.textContent = "Chargement…";
+      try {
+        const res = await fetch("/api/admin/features", { headers: headers() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || res.status);
+        document.getElementById("rejectBadTrip").checked = Boolean(data.rejectBadTrip);
+        msg.textContent = "OK — rejectBadTrip=" + data.rejectBadTrip;
+      } catch (e) {
+        msg.textContent = "Erreur: " + e.message;
+      }
+    }
+
+    document.getElementById("refreshBtn").onclick = refresh;
+    document.getElementById("saveBtn").onclick = async () => {
+      msg.textContent = "Enregistrement…";
+      try {
+        const res = await fetch("/api/admin/features", {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({
+            rejectBadTrip: document.getElementById("rejectBadTrip").checked,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || res.status);
+        msg.textContent = "Enregistré — rejectBadTrip=" + data.rejectBadTrip;
+      } catch (e) {
+        msg.textContent = "Erreur: " + e.message;
+      }
+    };
+
+    refresh();
+  </script>
+</body>
+</html>

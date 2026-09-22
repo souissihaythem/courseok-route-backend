@@ -6,7 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const { loadGistJson, saveGistJson } = require("./gistStore");
 
-const FREE_TRIAL_ANALYSES = 500;
+const FREE_TRIAL_ANALYSES = 1000;
 const SEED_PROMO = { code: "IYED", analyses: 1000, enabled: true };
 const BILLING_GIST_FILE = "courseok-billing.json";
 
