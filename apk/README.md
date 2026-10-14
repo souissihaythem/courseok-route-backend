@@ -1,1 +1,1 @@
-APKs are published as GitHub Releases (see public/install/version.json).
+Place CourseOK-latest.apk here for Render local download fallback.
