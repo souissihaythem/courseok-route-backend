@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CourseOK — L’utilitaire Android pour chauffeurs VTC / taxi</title>
+  <meta name="description" content="CourseOK : note chaque course Uber, Bolt, Heetch ou Allocab avant d’accepter. Dashcam, alerte près de chez toi, historique et packs d’analyses. Android hors Play Store." />
+  <meta name="theme-color" content="#0B0B0F" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+
+  <header class="top">
+    <a class="brand" href="#top">
+      <span class="brand-mark">OK</span>
+      <span class="brand-name">CourseOK</span>
+    </a>
+    <a class="top-link" href="#features">Fonctionnalités</a>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="pill">
+          <span class="pill-dot"></span>
+          Utilitaire chauffeur VTC / taxi · Android
+        </p>
+        <h1>
+          Le copilote<br />
+          des courses<br />
+          <em>Uber · Bolt · Heetch</em>
+        </h1>
+        <p class="lede">Note. Décide. Roule.</p>
+        <p class="sub">
+          CourseOK lit l’écran de ta plateforme VTC et affiche un <strong>verdict clair</strong>
+          (note /10, €/h, durée totale) <strong>avant que tu acceptes</strong>.
+          Plus : dashcam frontale, alerte « sur notre chemin », historique et packs d’analyses.
+        </p>
+
+        <div class="cta-row">
+          <a class="btn-primary" id="downloadBtn" href="https://github.com/souissihaythem/courseok-route-backend/releases/download/v0.5.56/CourseOK-0.5.56-71-20261014.apk">
+            Télécharger l’app (.apk)
+          </a>
+          <p class="meta">Android 9+ · <strong>Aucune version iOS</strong> · v0.5.56</p>
+        </div>
+
+        <aside class="warn">
+          <strong>Important :</strong> l’app n’est pas sur le Play Store.
+          Android affiche « source inconnue » / Play Protect —
+          c’est <strong>normal</strong>. Il faut appuyer sur
+          <strong>Installer quand même</strong>.
+          <br /><br />
+          Guide illustré :
+          <a href="aide-installation.html" style="color:inherit;font-weight:700">installer malgré le blocage Android</a>
+          ·
+          <a href="aide-lecture-ecran.html" style="color:inherit;font-weight:700">activer la lecture d’écran (Samsung / Xiaomi)</a>.
+        </aside>
+      </div>
+
+      <div class="hero-visual" aria-hidden="true">
+        <div class="phone">
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+            <div class="fake-status">9:41</div>
+            <div class="offer-card">
+              <div class="offer-price">19,20 €</div>
+              <div class="offer-meta">Course · 9 min · République → Bastille</div>
+              <div class="offer-actions">
+                <span class="chip accept">Accepter</span>
+                <span class="chip refuse">Refuser</span>
+              </div>
+            </div>
+
+            <div class="banner banner-green float-a">
+              <div class="banner-app">COURSEOK</div>
+              <div class="banner-row">
+                <strong>10/10</strong>
+                <span>128 €/h</span>
+              </div>
+              <div class="banner-foot">Trajet total <b>9 min</b> · 🎉 Sur notre chemin</div>
+            </div>
+
+            <div class="banner banner-yellow float-b">
+              <div class="banner-app">UBER</div>
+              <div class="banner-row">
+                <strong>5/10</strong>
+                <span>20 €/h</span>
+              </div>
+              <div class="banner-foot">Trajet total <b>37 min</b></div>
+            </div>
+
+            <div class="banner banner-red float-c">
+              <div class="banner-app">BOLT</div>
+              <div class="banner-row">
+                <strong>3/10</strong>
+                <span>18 €/h</span>
+              </div>
+              <div class="banner-foot">Trajet total <b>43 min</b></div>
+            </div>
+          </div>
+        </div>
+        <div class="marquee">
+          <div class="marquee-track">
+            <span>VTC</span><span>TAXI</span><span>UBER</span><span>BOLT</span><span>HEETCH</span><span>DASHCAM</span>
+            <span>VTC</span><span>TAXI</span><span>UBER</span><span>BOLT</span><span>HEETCH</span><span>DASHCAM</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="why" id="features">
+      <p class="eyebrow">Fonctionnalités</p>
+      <h2>Tout ce qu’il faut en course.</h2>
+      <p class="why-sub">Un utilitaire Android pensé pour le quotidien chauffeur — pas un nouvel abonnement opaque.</p>
+
+      <div class="grid features-grid">
+        <article class="card">
+          <span class="num">01</span>
+          <h3>Score avant d’accepter</h3>
+          <p>Lecture d’écran Uber / Bolt / Heetch / Allocab → note /10, €/h, km et prix sur le bandeau.</p>
+        </article>
+        <article class="card">
+          <span class="num">02</span>
+          <h3>Alerte « Sur notre chemin »</h3>
+          <p>Si la destination est proche de ton adresse (rayon 2–20 km), un smiley s’affiche sur le verdict.</p>
+        </article>
+        <article class="card">
+          <span class="num">03</span>
+          <h3>Dashcam frontale</h3>
+          <p>Enregistrement HD (pas de 2K+), arrêt auto en veille, liste des vidéos, FAB vert/rouge pour activer vite.</p>
+        </article>
+        <article class="card">
+          <span class="num">04</span>
+          <h3>Historique des courses</h3>
+          <p>Retrouve les offres détectées, scores et trajets pour suivre ta journée.</p>
+        </article>
+        <article class="card">
+          <span class="num">05</span>
+          <h3>Stats &amp; packs</h3>
+          <p>1000 analyses offertes. Ensuite packs SumUp ou code promo — tu paies les analyses, pas un forfait flou.</p>
+        </article>
+        <article class="card">
+          <span class="num">06</span>
+          <h3>Sans accepter à ta place</h3>
+          <p>CourseOK lit l’écran et te conseille. L’auto-refus des courses rouges reste optionnel (feature admin).</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="why screens" id="ecrans">
+      <p class="eyebrow">Captures</p>
+      <h2>L’app en vrai.</h2>
+      <p class="why-sub">Accueil, dashcam, stats, forfaits — version 0.5.56.</p>
+      <div class="shot-grid">
+        <figure class="shot">
+          <img src="img/screens/02-home.png" alt="Accueil CourseOK — analyses Uber/Bolt et alerte près de chez toi" loading="lazy" />
+          <figcaption>Accueil · plateformes + alerte destination</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="img/screens/04-dashcam.png" alt="Onglet Dashcam — toggle et liste vidéos" loading="lazy" />
+          <figcaption>Dashcam · caméra frontale HD</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="img/screens/05-stats.png" alt="Stats d’analyses par plateforme" loading="lazy" />
+          <figcaption>Stats · quota et plateformes</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="img/screens/06-packs.png" alt="Forfaits d’analyses" loading="lazy" />
+          <figcaption>Forfaits · packs &amp; promo</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="img/screens/03-history.png" alt="Historique des courses" loading="lazy" />
+          <figcaption>Historique</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="img/screens/01-launch.png" alt="Écran d’activation des permissions" loading="lazy" />
+          <figcaption>Réglages lecture d’écran</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="install-steps" id="installer">
+      <p class="eyebrow">Après le téléchargement</p>
+      <h2>Android bloque ? Appuie ici.</h2>
+      <p class="why-sub" style="margin-bottom:22px">
+        Sans ces clics, le .apk reste dans Téléchargements et l’app n’apparaît jamais.
+      </p>
+
+      <div class="steps-grid">
+        <article class="step-card">
+          <span class="step-badge">1</span>
+          <h3>Ouvre le fichier .apk</h3>
+          <p>Depuis la notification Chrome / Fichiers.</p>
+        </article>
+        <article class="step-card">
+          <span class="step-badge">2</span>
+          <h3>Autorise la source</h3>
+          <p>Paramètres → active « Autoriser depuis cette source ».</p>
+          <img src="img/step2-toggle-autoriser.png" alt="Activer Autoriser depuis cette source" loading="lazy" />
+        </article>
+        <article class="step-card highlight">
+          <span class="step-badge">3</span>
+          <h3>Installer quand même</h3>
+          <p>Le bouton vert — c’est lui qui valide l’install.</p>
+          <img src="img/step4-bouton-installer.png" alt="Bouton Installer quand même" loading="lazy" />
+          <a class="btn-secondary" href="aide-installation.html">Voir le guide complet</a>
+        </article>
+      </div>
+    </section>
+
+    <section class="help">
+      <div class="help-card">
+        <h2>Besoin d’aide pour l’installation ?</h2>
+        <p>Bloqué sur « source inconnue » ou Play Protect ? Suis le guide illustré, ou écris-nous.</p>
+        <div class="help-actions">
+          <a class="btn-secondary" href="aide-installation.html">Guide source inconnue</a>
+          <a class="btn-secondary" href="mailto:dupontalen@gmail.com?subject=Aide%20installation%20CourseOK">
+            Contacter le support
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section class="why">
+      <p class="disclaimer">
+        CourseOK <strong>lit l’écran</strong> pour évaluer la course, et
+        <strong>n’accepte jamais</strong> une course à votre place.
+        La dashcam utilise la caméra frontale (qualité moyenne) et s’arrête quand le téléphone se met en veille.
+      </p>
+    </section>
+  </main>
+
+  <div class="mobile-cta">
+    <a class="btn-primary" href="https://github.com/souissihaythem/courseok-route-backend/releases/download/v0.5.56/CourseOK-0.5.56-71-20261014.apk">
+      Télécharger l’app (.apk)
+    </a>
+  </div>
+
+  <footer class="foot">
+    <span>© CourseOK — utilitaire VTC / taxi</span>
+    <span id="versionLabel">APK v0.5.56</span>
+  </footer>
+
+  <script>
+    (function () {
+      var fallbackUrl = "https://github.com/souissihaythem/courseok-route-backend/releases/download/v0.5.56/CourseOK-0.5.56-71-20261014.apk";
+      var fallbackVer = "0.5.56";
+      function apply(url, ver) {
+        document.querySelectorAll("a.btn-primary").forEach(function (btn) {
+          btn.href = url;
+        });
+        var label = document.getElementById("versionLabel");
+        if (label) label.textContent = "APK v" + ver;
+        document.querySelectorAll("p.meta").forEach(function (el) {
+          el.innerHTML = el.innerHTML.replace(/v0\.\d+\.\d+/g, "v" + ver);
+        });
+      }
+      apply(window.COURSEOK_APK_URL || fallbackUrl, fallbackVer);
+      fetch("https://cdn.jsdelivr.net/gh/souissihaythem/courseok-route-backend@main/public/install/version.json?t=" + Date.now())
+        .then(function (r) { return r.json(); })
+        .then(function (v) {
+          if (v && v.apkUrl && v.version) apply(v.apkUrl, v.version);
+        })
+        .catch(function () {});
+      try {
+        if (!sessionStorage.getItem("courseok_pv")) {
+          sessionStorage.setItem("courseok_pv", "1");
+          fetch("/api/analytics/pageview", { method: "POST", keepalive: true }).catch(function () {});
+        }
+      } catch (e) {}
+    })();
+  </script>
+</body>
+</html>

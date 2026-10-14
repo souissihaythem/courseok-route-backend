@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CourseOK — Installer malgré « source inconnue »</title>
+  <meta name="description" content="Guide Android : autoriser l’installation hors Play Store et appuyer sur Installer quand même." />
+  <meta name="theme-color" content="#0B0B0F" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .guide {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 28px var(--pad) 100px;
+      position: relative;
+      z-index: 1;
+    }
+    .guide a.back {
+      color: var(--lime);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .guide h1 {
+      font-family: var(--font-display);
+      font-size: clamp(1.7rem, 4.5vw, 2.4rem);
+      margin: 16px 0 10px;
+      line-height: 1.15;
+    }
+    .guide .lead {
+      color: var(--muted);
+      line-height: 1.55;
+      margin: 0 0 22px;
+      font-size: 1.05rem;
+    }
+    .alert {
+      background: rgba(184, 242, 44, 0.1);
+      border: 1px solid rgba(184, 242, 44, 0.4);
+      border-radius: 16px;
+      padding: 16px 18px;
+      margin: 0 0 28px;
+      line-height: 1.5;
+    }
+    .alert strong { color: var(--lime); }
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--stroke);
+      border-radius: 20px;
+      padding: 18px;
+      margin: 0 0 18px;
+    }
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 999px;
+      background: var(--lime);
+      color: #101010;
+      font-weight: 800;
+      font-family: var(--font-display);
+      margin-bottom: 10px;
+    }
+    .step h2 {
+      font-family: var(--font-display);
+      font-size: 1.2rem;
+      margin: 0 0 8px;
+    }
+    .step p {
+      margin: 0 0 14px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .step .tap {
+      display: inline-block;
+      background: rgba(184, 242, 44, 0.15);
+      color: var(--lime);
+      border: 1px solid rgba(184, 242, 44, 0.45);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      font-size: 0.95rem;
+    }
+    .step img {
+      width: 100%;
+      max-width: 360px;
+      display: block;
+      margin: 0 auto;
+      border-radius: 18px;
+      border: 1px solid var(--stroke);
+      background: #000;
+    }
+    .cta-box {
+      margin-top: 28px;
+      text-align: center;
+    }
+    .cta-box .btn-primary {
+      display: inline-flex;
+      width: auto;
+      min-width: 260px;
+      justify-content: center;
+    }
+    .next {
+      margin-top: 22px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .next a { color: var(--lime); font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <main class="guide">
+    <p><a class="back" href="./">← Retour à l’install</a></p>
+    <h1>Android bloque l’install ? C’est normal.</h1>
+    <p class="lead">
+      CourseOK n’est <strong>pas</strong> sur le Play Store. Android affiche donc
+      « source inconnue » / Play Protect. Ce n’est <strong>pas un virus</strong> —
+      tu dois juste autoriser <strong>une fois</strong>, puis appuyer sur
+      <strong>Installer quand même</strong>.
+    </p>
+
+    <div class="alert">
+      <strong>Pourquoi 40 téléchargements et peu d’installs ?</strong><br />
+      La plupart des chauffeurs téléchargent le .apk, voient l’écran de blocage,
+      et s’arrêtent. Suis les 4 étapes ci-dessous — 1 minute.
+    </div>
+
+    <article class="step">
+      <div class="step-num">1</div>
+      <h2>Télécharge puis ouvre le fichier</h2>
+      <p>
+        Appuie sur <strong>Télécharger l’app</strong>, puis ouvre
+        <strong>CourseOK-….apk</strong> depuis les notifications ou Fichiers / Chrome.
+      </p>
+      <a class="btn-primary" href="https://courseok-route-backend.onrender.com/downloads/CourseOK-latest.apk" style="display:inline-flex;width:auto;padding:14px 22px">
+        Télécharger l’APK
+      </a>
+    </article>
+
+    <article class="step">
+      <div class="step-num">2</div>
+      <h2>Autorise Chrome (ou Fichiers)</h2>
+      <p>
+        Android demande : « Autoriser Chrome à installer des apps ? »
+        Appuie sur <strong>Paramètres</strong>.
+      </p>
+      <span class="tap">Bouton : Paramètres → Autoriser</span>
+      <img src="img/step1-autoriser-chrome.png" alt="Écran Autoriser Chrome — bouton Paramètres" width="360" height="640" loading="lazy" />
+    </article>
+
+    <article class="step">
+      <div class="step-num">3</div>
+      <h2>Active « Autoriser depuis cette source »</h2>
+      <p>
+        Sur l’écran suivant, active le bouton (il devient vert / ON),
+        puis reviens en arrière et rouvre le fichier .apk.
+      </p>
+      <span class="tap">Bouton à activer : Autoriser depuis cette source</span>
+      <img src="img/step2-toggle-autoriser.png" alt="Toggle Autoriser depuis cette source activé" width="360" height="640" loading="lazy" />
+    </article>
+
+    <article class="step">
+      <div class="step-num">4</div>
+      <h2>Appuie sur « Installer quand même »</h2>
+      <p>
+        Play Protect peut afficher un avertissement. Ce n’est pas une erreur.
+        Appuie sur <strong>Plus de détails</strong> si besoin, puis sur
+        <strong>Installer quand même</strong> (bouton vert).
+      </p>
+      <span class="tap">Bouton final : Installer quand même</span>
+      <img src="img/step3-installer-quand-meme.png" alt="Dialogue Installer CourseOK avec Installer quand même" width="360" height="640" loading="lazy" />
+      <img src="img/step4-bouton-installer.png" alt="Écran Play Protect — Installer quand même mis en avant" width="360" height="640" loading="lazy" style="margin-top:14px" />
+    </article>
+
+    <div class="cta-box">
+      <a class="btn-primary" href="https://courseok-route-backend.onrender.com/downloads/CourseOK-latest.apk">
+        Télécharger et installer
+      </a>
+      <p class="next">
+        Après l’install : ouvre CourseOK, puis active la
+        <a href="aide-lecture-ecran.html">lecture d’écran (guide Samsung / Xiaomi)</a>.
+      </p>
+    </div>
+  </main>
+</body>
+</html>
