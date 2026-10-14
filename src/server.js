@@ -29,7 +29,7 @@ const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || "").trim().replace(/\/$/
 const APK_DOWNLOAD_URL = (process.env.APK_DOWNLOAD_URL || "").trim();
 /** Canonical APK — always prefer this over a stale Render env URL. */
 const DEFAULT_APK_DOWNLOAD_URL =
-  "https://github.com/souissihaythem/courseok-route-backend/releases/download/v0.5.53/CourseOK-0.5.53-68-20261004.apk";
+  "https://github.com/souissihaythem/courseok-route-backend/releases/download/v0.5.56/CourseOK-0.5.56-71-20261014.apk";
 const EFFECTIVE_APK_DOWNLOAD_URL = DEFAULT_APK_DOWNLOAD_URL || APK_DOWNLOAD_URL;
 /** Install marketing page hosted on GitHub Pages (updates on every git push). */
 const INSTALL_MIRROR_URL = (
@@ -230,6 +230,8 @@ async function main() {
     try {
       const updated = await featureFlags.set({
         rejectBadTrip: req.body?.rejectBadTrip,
+        dashcam: req.body?.dashcam,
+        nearHomeAlert: req.body?.nearHomeAlert,
       });
       res.json(updated);
     } catch (err) {

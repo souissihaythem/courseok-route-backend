@@ -439,6 +439,40 @@ h1 em {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
+.features-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.shot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.shot {
+  margin: 0;
+  background: var(--surface);
+  border: 1px solid var(--stroke);
+  border-radius: 22px;
+  overflow: hidden;
+  transition: transform 0.25s ease, border-color 0.25s ease;
+}
+.shot:hover {
+  transform: translateY(-4px);
+  border-color: rgba(184, 242, 44, 0.35);
+}
+.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 9 / 19.5;
+  object-fit: cover;
+  object-position: top;
+  background: #0e0e14;
+}
+.shot figcaption {
+  padding: 12px 14px 14px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
 .card {
   background: var(--surface);
   border: 1px solid var(--stroke);
@@ -510,6 +544,11 @@ h1 em {
 /* —— Mobile / small tablet —— */
 @media (max-width: 899px) {
   :root { --pad: 16px; }
+
+  .features-grid,
+  .shot-grid {
+    grid-template-columns: 1fr;
+  }
 
   .top {
     padding: 16px var(--pad) 0;
