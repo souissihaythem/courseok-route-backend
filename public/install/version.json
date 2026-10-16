@@ -1,8 +1,8 @@
 {
-  "version": "0.5.62",
-  "versionCode": 77,
-  "apkUrl": "https://github.com/souissihaythem/courseok-route-backend/releases/download/v0.5.62/CourseOK-0.5.62-77-20261016.apk",
-  "updatedAt": "2026-10-16T09:22:00Z",
+  "version": "0.5.66",
+  "versionCode": 81,
+  "apkUrl": "https://github.com/souissihaythem/courseok-route-backend/releases/download/v0.5.66/CourseOK-0.5.66-81-20261016.apk",
+  "updatedAt": "2026-10-16T11:30:00Z",
   "features": [
     "score_before_accept",
     "near_home_alert",
