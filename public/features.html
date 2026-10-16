@@ -83,16 +83,12 @@
         <span><strong>rejectBadTrip</strong> — auto-refus courses rouges / arrêts (Uber &amp; Bolt)</span>
       </label>
       <label class="flag">
-        <input id="dashcam" type="checkbox" />
-        <span><strong>dashcam</strong> — onglet Dashcam + FAB caméra frontale</span>
-      </label>
-      <label class="flag">
         <input id="nearHomeAlert" type="checkbox" />
         <span><strong>nearHomeAlert</strong> — alerte « Sur notre chemin » (destination proche)</span>
       </label>
       <p class="note">
         <strong>rejectBadTrip</strong> : si activé, l’app peut afficher les toggles d’auto-refus.<br />
-        <strong>dashcam</strong> / <strong>nearHomeAlert</strong> : flags exposés pour le rollout / kill-switch admin (défaut = on).
+        <strong>nearHomeAlert</strong> : kill-switch admin pour l’alerte destination (défaut = on).
       </p>
       <div class="row" style="margin-top:16px">
         <button class="primary" id="saveBtn">Enregistrer</button>
@@ -123,11 +119,9 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || res.status);
         document.getElementById("rejectBadTrip").checked = Boolean(data.rejectBadTrip);
-        document.getElementById("dashcam").checked = data.dashcam !== false;
         document.getElementById("nearHomeAlert").checked = data.nearHomeAlert !== false;
         msg.textContent =
           "OK — rejectBadTrip=" + data.rejectBadTrip +
-          " dashcam=" + data.dashcam +
           " nearHomeAlert=" + data.nearHomeAlert;
       } catch (e) {
         msg.textContent = "Erreur: " + e.message;
@@ -143,7 +137,6 @@
           headers: headers(),
           body: JSON.stringify({
             rejectBadTrip: document.getElementById("rejectBadTrip").checked,
-            dashcam: document.getElementById("dashcam").checked,
             nearHomeAlert: document.getElementById("nearHomeAlert").checked,
           }),
         });
@@ -151,7 +144,6 @@
         if (!res.ok) throw new Error(data.error || res.status);
         msg.textContent =
           "Enregistré — rejectBadTrip=" + data.rejectBadTrip +
-          " dashcam=" + data.dashcam +
           " nearHomeAlert=" + data.nearHomeAlert;
       } catch (e) {
         msg.textContent = "Erreur: " + e.message;

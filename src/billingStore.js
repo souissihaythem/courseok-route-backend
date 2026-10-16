@@ -14,13 +14,23 @@ function newId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+const PLAY_PRODUCTS = {
+  analyses_200: { analyses: 200, kind: "one_time" },
+  analyses_500: { analyses: 500, kind: "one_time" },
+  unlimited_monthly: { analyses: 0, kind: "subscription", days: 31 },
+};
+
 function balanceOf(device) {
   const used = Number(device.used || 0);
   const quota = Number(device.quota || 0);
+  const unlimitedUntilMs = Number(device.unlimitedUntilMs || 0);
+  const unlimited = unlimitedUntilMs > Date.now();
   return {
     used,
     quota,
-    remaining: Math.max(0, quota - used),
+    remaining: unlimited ? Number.MAX_SAFE_INTEGER : Math.max(0, quota - used),
+    unlimited,
+    unlimitedUntilMs,
   };
 }
 
@@ -134,8 +144,12 @@ function createFileBillingStore(dataDir, gistOptions = null) {
       const id = String(deviceId || "").trim();
       const device = state.devices[id];
       if (!device) return { ok: false, reason: "unknown_device" };
+      const bal = balanceOf(device);
+      if (bal.unlimited) {
+        return { ok: true, ...bal };
+      }
       if (device.used >= device.quota) {
-        return { ok: false, reason: "no_credits", ...balanceOf(device) };
+        return { ok: false, reason: "no_credits", ...bal };
       }
       device.used += 1;
       device.updatedAtMs = Date.now();
@@ -153,6 +167,7 @@ function createFileBillingStore(dataDir, gistOptions = null) {
           deviceId: id,
           used: 0,
           quota: FREE_TRIAL_ANALYSES + n,
+          unlimitedUntilMs: 0,
           createdAtMs: now,
           updatedAtMs: now,
         };
@@ -163,6 +178,78 @@ function createFileBillingStore(dataDir, gistOptions = null) {
       }
       write(state);
       return balanceOf(device);
+    },
+
+    async setUnlimited(deviceId, untilMs) {
+      const id = String(deviceId || "").trim();
+      const until = Math.max(0, Number(untilMs) || 0);
+      let device = state.devices[id];
+      const now = Date.now();
+      if (!device) {
+        device = {
+          deviceId: id,
+          used: 0,
+          quota: FREE_TRIAL_ANALYSES,
+          unlimitedUntilMs: until,
+          createdAtMs: now,
+          updatedAtMs: now,
+        };
+        state.devices[id] = device;
+      } else {
+        device.unlimitedUntilMs = Math.max(Number(device.unlimitedUntilMs || 0), until);
+        device.updatedAtMs = now;
+      }
+      write(state);
+      return balanceOf(device);
+    },
+
+    /**
+     * Credit a Google Play purchase (idempotent on purchaseToken).
+     * Verification against Google Play Developer API can be added later.
+     */
+    async creditPlayPurchase({ deviceId, productId, purchaseToken, orderId }) {
+      const id = String(deviceId || "").trim();
+      const pid = String(productId || "").trim();
+      const token = String(purchaseToken || "").trim();
+      if (!id || !pid || !token) {
+        return { ok: false, reason: "missing_args" };
+      }
+      const product = PLAY_PRODUCTS[pid];
+      if (!product) {
+        return { ok: false, reason: "unknown_product" };
+      }
+      const existing = state.purchases.find(
+        (p) => p.playPurchaseToken === token && p.status === "paid",
+      );
+      if (existing) {
+        await this.registerDevice(id);
+        const balance = await this.getBalance(id);
+        return { ok: true, alreadyPaid: true, purchase: existing, balance };
+      }
+      await this.registerDevice(id);
+      let balance;
+      if (product.kind === "subscription") {
+        const days = product.days || 31;
+        const until = Date.now() + days * 24 * 60 * 60 * 1000;
+        balance = await this.setUnlimited(id, until);
+      } else {
+        balance = await this.addQuota(id, product.analyses);
+      }
+      const purchase = {
+        id: newId(),
+        deviceId: id,
+        packId: pid,
+        analyses: product.analyses || 0,
+        amountCents: 0,
+        playPurchaseToken: token,
+        playOrderId: orderId || null,
+        status: "paid",
+        atMs: Date.now(),
+      };
+      state.purchases.unshift(purchase);
+      if (state.purchases.length > 5000) state.purchases.length = 5000;
+      write(state);
+      return { ok: true, alreadyPaid: false, purchase, balance };
     },
 
     async listPromos() {
@@ -271,10 +358,25 @@ async function createTursoBillingStore(url, authToken) {
       device_id TEXT PRIMARY KEY,
       used INTEGER NOT NULL DEFAULT 0,
       quota INTEGER NOT NULL DEFAULT 0,
+      unlimited_until_ms INTEGER NOT NULL DEFAULT 0,
       created_at_ms INTEGER NOT NULL,
       updated_at_ms INTEGER NOT NULL
     )
   `);
+  try {
+    await client.execute(
+      `ALTER TABLE devices ADD COLUMN unlimited_until_ms INTEGER NOT NULL DEFAULT 0`,
+    );
+  } catch (_) {
+    /* column already exists */
+  }
+  try {
+    await client.execute(
+      `ALTER TABLE purchases ADD COLUMN play_purchase_token TEXT`,
+    );
+  } catch (_) {
+    /* column already exists */
+  }
   await client.execute(`
     CREATE TABLE IF NOT EXISTS promo_codes (
       code TEXT PRIMARY KEY,
@@ -320,7 +422,7 @@ async function createTursoBillingStore(url, authToken) {
 
   async function loadDevice(deviceId) {
     const rs = await client.execute({
-      sql: `SELECT device_id, used, quota, created_at_ms, updated_at_ms FROM devices WHERE device_id = ?`,
+      sql: `SELECT device_id, used, quota, unlimited_until_ms, created_at_ms, updated_at_ms FROM devices WHERE device_id = ?`,
       args: [deviceId],
     });
     const row = rs.rows[0];
@@ -329,6 +431,7 @@ async function createTursoBillingStore(url, authToken) {
       deviceId: row.device_id,
       used: Number(row.used),
       quota: Number(row.quota),
+      unlimitedUntilMs: Number(row.unlimited_until_ms || 0),
       createdAtMs: Number(row.created_at_ms),
       updatedAtMs: Number(row.updated_at_ms),
     };
@@ -346,12 +449,19 @@ async function createTursoBillingStore(url, authToken) {
       const now = Date.now();
       await client.execute({
         sql: `
-          INSERT INTO devices (device_id, used, quota, created_at_ms, updated_at_ms)
-          VALUES (?, 0, ?, ?, ?)
+          INSERT INTO devices (device_id, used, quota, unlimited_until_ms, created_at_ms, updated_at_ms)
+          VALUES (?, 0, ?, 0, ?, ?)
         `,
         args: [id, FREE_TRIAL_ANALYSES, now, now],
       });
-      return { used: 0, quota: FREE_TRIAL_ANALYSES, remaining: FREE_TRIAL_ANALYSES, created: true };
+      return {
+        used: 0,
+        quota: FREE_TRIAL_ANALYSES,
+        remaining: FREE_TRIAL_ANALYSES,
+        unlimited: false,
+        unlimitedUntilMs: 0,
+        created: true,
+      };
     },
 
     async getBalance(deviceId) {
@@ -364,8 +474,12 @@ async function createTursoBillingStore(url, authToken) {
       const id = String(deviceId || "").trim();
       const device = await loadDevice(id);
       if (!device) return { ok: false, reason: "unknown_device" };
+      const bal = balanceOf(device);
+      if (bal.unlimited) {
+        return { ok: true, ...bal };
+      }
       if (device.used >= device.quota) {
-        return { ok: false, reason: "no_credits", ...balanceOf(device) };
+        return { ok: false, reason: "no_credits", ...bal };
       }
       const now = Date.now();
       const rs = await client.execute({
@@ -392,8 +506,8 @@ async function createTursoBillingStore(url, authToken) {
       if (!existing) {
         await client.execute({
           sql: `
-            INSERT INTO devices (device_id, used, quota, created_at_ms, updated_at_ms)
-            VALUES (?, 0, ?, ?, ?)
+            INSERT INTO devices (device_id, used, quota, unlimited_until_ms, created_at_ms, updated_at_ms)
+            VALUES (?, 0, ?, 0, ?, ?)
           `,
           args: [id, FREE_TRIAL_ANALYSES + n, now, now],
         });
@@ -404,6 +518,96 @@ async function createTursoBillingStore(url, authToken) {
         });
       }
       return balanceOf(await loadDevice(id));
+    },
+
+    async setUnlimited(deviceId, untilMs) {
+      const id = String(deviceId || "").trim();
+      const until = Math.max(0, Number(untilMs) || 0);
+      const now = Date.now();
+      const existing = await loadDevice(id);
+      if (!existing) {
+        await client.execute({
+          sql: `
+            INSERT INTO devices (device_id, used, quota, unlimited_until_ms, created_at_ms, updated_at_ms)
+            VALUES (?, 0, ?, ?, ?, ?)
+          `,
+          args: [id, FREE_TRIAL_ANALYSES, until, now, now],
+        });
+      } else {
+        const next = Math.max(Number(existing.unlimitedUntilMs || 0), until);
+        await client.execute({
+          sql: `UPDATE devices SET unlimited_until_ms = ?, updated_at_ms = ? WHERE device_id = ?`,
+          args: [next, now, id],
+        });
+      }
+      return balanceOf(await loadDevice(id));
+    },
+
+    async creditPlayPurchase({ deviceId, productId, purchaseToken, orderId }) {
+      const id = String(deviceId || "").trim();
+      const pid = String(productId || "").trim();
+      const token = String(purchaseToken || "").trim();
+      if (!id || !pid || !token) {
+        return { ok: false, reason: "missing_args" };
+      }
+      const product = PLAY_PRODUCTS[pid];
+      if (!product) {
+        return { ok: false, reason: "unknown_product" };
+      }
+      const existingRs = await client.execute({
+        sql: `SELECT * FROM purchases WHERE play_purchase_token = ? AND status = 'paid' LIMIT 1`,
+        args: [token],
+      });
+      if (existingRs.rows[0]) {
+        await this.registerDevice(id);
+        const balance = await this.getBalance(id);
+        return {
+          ok: true,
+          alreadyPaid: true,
+          purchase: rowToPurchase(existingRs.rows[0]),
+          balance,
+        };
+      }
+      await this.registerDevice(id);
+      let balance;
+      if (product.kind === "subscription") {
+        const days = product.days || 31;
+        const until = Date.now() + days * 24 * 60 * 60 * 1000;
+        balance = await this.setUnlimited(id, until);
+      } else {
+        balance = await this.addQuota(id, product.analyses);
+      }
+      const purchase = {
+        id: newId(),
+        deviceId: id,
+        packId: pid,
+        analyses: product.analyses || 0,
+        amountCents: 0,
+        sumupCheckoutId: null,
+        playPurchaseToken: token,
+        playOrderId: orderId || null,
+        status: "paid",
+        atMs: Date.now(),
+      };
+      await client.execute({
+        sql: `
+          INSERT INTO purchases
+            (id, device_id, pack_id, analyses, amount_cents, sumup_checkout_id, status, at_ms, play_purchase_token)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        args: [
+          purchase.id,
+          purchase.deviceId,
+          purchase.packId,
+          purchase.analyses,
+          purchase.amountCents,
+          purchase.sumupCheckoutId,
+          purchase.status,
+          purchase.atMs,
+          token,
+        ],
+      });
+      return { ok: true, alreadyPaid: false, purchase, balance };
     },
 
     async listPromos() {
@@ -557,6 +761,7 @@ function rowToPurchase(row) {
     analyses: Number(row.analyses),
     amountCents: Number(row.amount_cents),
     sumupCheckoutId: row.sumup_checkout_id || null,
+    playPurchaseToken: row.play_purchase_token || null,
     status: row.status,
     atMs: Number(row.at_ms),
   };

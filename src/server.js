@@ -230,7 +230,6 @@ async function main() {
     try {
       const updated = await featureFlags.set({
         rejectBadTrip: req.body?.rejectBadTrip,
-        dashcam: req.body?.dashcam,
         nearHomeAlert: req.body?.nearHomeAlert,
       });
       res.json(updated);
@@ -360,6 +359,8 @@ async function main() {
           used: result.used ?? 0,
           quota: result.quota ?? 0,
           remaining: result.remaining ?? 0,
+          unlimited: Boolean(result.unlimited),
+          unlimitedUntilMs: Number(result.unlimitedUntilMs || 0),
         });
       }
       res.json(result);
@@ -379,6 +380,39 @@ async function main() {
         return res.status(400).json({ error: result.reason || "invalid_code" });
       }
       res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: String(err.message || err) });
+    }
+  });
+
+  /** Google Play Billing: credit analyses / unlimited after a successful purchase. */
+  app.post("/api/billing/play-purchase", async (req, res) => {
+    const deviceId = requireDeviceId(req.body);
+    const productId = String(req.body?.productId || "").trim();
+    const purchaseToken = String(req.body?.purchaseToken || "").trim();
+    const orderId = String(req.body?.orderId || "").trim() || null;
+    if (!deviceId) return res.status(400).json({ error: "deviceId required" });
+    if (!productId) return res.status(400).json({ error: "productId required" });
+    if (!purchaseToken) return res.status(400).json({ error: "purchaseToken required" });
+    try {
+      if (typeof billing.creditPlayPurchase !== "function") {
+        return res.status(501).json({ error: "play_purchase_unsupported" });
+      }
+      const result = await billing.creditPlayPurchase({
+        deviceId,
+        productId,
+        purchaseToken,
+        orderId,
+      });
+      if (!result.ok) {
+        return res.status(400).json({ error: result.reason || "credit_failed" });
+      }
+      res.json({
+        ok: true,
+        alreadyPaid: Boolean(result.alreadyPaid),
+        balance: result.balance,
+        purchase: result.purchase,
+      });
     } catch (err) {
       res.status(500).json({ error: String(err.message || err) });
     }

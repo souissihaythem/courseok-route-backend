@@ -9,8 +9,6 @@ const FLAGS_FILE = "courseok-feature-flags.json";
 const DEFAULTS = {
   /** When true, app may show Uber/Bolt auto-refuse toggles and perform refuse taps. */
   rejectBadTrip: false,
-  /** Front-camera dashcam tab + FAB (informational / future kill-switch). */
-  dashcam: true,
   /** Near-home destination alert on scored banner. */
   nearHomeAlert: true,
 };
@@ -29,7 +27,6 @@ function createFeatureFlagsStore(dataDir) {
     const src = raw && typeof raw === "object" ? raw : {};
     return {
       rejectBadTrip: Boolean(src.rejectBadTrip),
-      dashcam: src.dashcam === undefined ? DEFAULTS.dashcam : Boolean(src.dashcam),
       nearHomeAlert:
         src.nearHomeAlert === undefined ? DEFAULTS.nearHomeAlert : Boolean(src.nearHomeAlert),
     };
