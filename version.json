@@ -1,14 +1,16 @@
 {
-  "version": "0.5.56",
-  "versionCode": 71,
-  "apkUrl": "https://github.com/souissihaythem/courseok-route-backend/releases/download/v0.5.56/CourseOK-0.5.56-71-20261014.apk",
-  "updatedAt": "2026-10-14T18:40:00Z",
+  "version": "0.5.75",
+  "versionCode": 90,
+  "apkUrl": "https://github.com/souissihaythem/courseok-route-backend/releases/download/v0.5.75/CourseOK-0.5.75-90-20261022.apk",
+  "updatedAt": "2026-10-22T10:37:00Z",
   "features": [
     "score_before_accept",
     "near_home_alert",
-    "dashcam",
+    "dashcam_vtc_play_promo",
     "history",
     "stats",
-    "packs"
+    "packs",
+    "play_billing",
+    "sumup_sideload"
   ]
 }
