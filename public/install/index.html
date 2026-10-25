@@ -245,6 +245,7 @@
     (function () {
       var fallbackUrl = "https://github.com/souissihaythem/courseok-route-backend/releases/download/v0.5.84/CourseOK-0.5.84-99-20261025.apk";
       var fallbackVer = "0.5.84";
+      var fallbackCode = 99;
       function apply(url, ver) {
         document.querySelectorAll("a.btn-primary").forEach(function (btn) {
           btn.href = url;
@@ -259,7 +260,10 @@
       fetch("https://raw.githubusercontent.com/souissihaythem/courseok-route-backend/main/public/install/version.json?t=" + Date.now())
         .then(function (r) { return r.json(); })
         .then(function (v) {
-          if (v && v.apkUrl && v.version) apply(v.apkUrl, v.version);
+          // Never downgrade if a CDN/raw cache still serves an older version.json.
+          if (v && v.apkUrl && v.version && (v.versionCode || 0) >= fallbackCode) {
+            apply(v.apkUrl, v.version);
+          }
         })
         .catch(function () {});
       try {
