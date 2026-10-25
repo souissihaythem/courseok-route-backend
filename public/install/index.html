@@ -256,7 +256,7 @@
         });
       }
       apply(window.COURSEOK_APK_URL || fallbackUrl, fallbackVer);
-      fetch("https://cdn.jsdelivr.net/gh/souissihaythem/courseok-route-backend@main/public/install/version.json?t=" + Date.now())
+      fetch("https://raw.githubusercontent.com/souissihaythem/courseok-route-backend/main/public/install/version.json?t=" + Date.now())
         .then(function (r) { return r.json(); })
         .then(function (v) {
           if (v && v.apkUrl && v.version) apply(v.apkUrl, v.version);
