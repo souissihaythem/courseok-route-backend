@@ -385,6 +385,34 @@ async function main() {
     }
   });
 
+  app.post("/api/billing/referral", async (req, res) => {
+    const deviceId = requireDeviceId(req.body);
+    if (!deviceId) return res.status(400).json({ error: "deviceId required" });
+    try {
+      const code = await billing.ensureReferralCode(deviceId);
+      if (!code) return res.status(400).json({ error: "deviceId required" });
+      res.json({ code, analyses: 500 });
+    } catch (err) {
+      res.status(500).json({ error: String(err.message || err) });
+    }
+  });
+
+  app.post("/api/billing/referral/redeem", async (req, res) => {
+    const deviceId = requireDeviceId(req.body);
+    const code = String(req.body?.code || "").trim();
+    if (!deviceId) return res.status(400).json({ error: "deviceId required" });
+    if (!code) return res.status(400).json({ error: "code required" });
+    try {
+      const result = await billing.redeemReferral(deviceId, code);
+      if (!result.ok) {
+        return res.status(400).json({ error: result.reason || "invalid_code" });
+      }
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: String(err.message || err) });
+    }
+  });
+
   /** Google Play Billing: credit analyses / unlimited after a successful purchase. */
   app.post("/api/billing/play-purchase", async (req, res) => {
     const deviceId = requireDeviceId(req.body);

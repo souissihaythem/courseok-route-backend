@@ -7,7 +7,26 @@ const path = require("path");
 const { loadGistJson, saveGistJson } = require("./gistStore");
 
 const FREE_TRIAL_ANALYSES = 1000;
+const REFERRAL_ANALYSES = 500;
 const SEED_PROMO = { code: "IYED", analyses: 1000, enabled: true };
+const REFERRAL_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/** Stable code so the same device always shares the same invitation. */
+function referralCodeFor(deviceId) {
+  let h = 2166136261;
+  const s = `courseok-ref-v1:${deviceId}`;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  let x = h >>> 0;
+  let code = "CK";
+  for (let i = 0; i < 6; i++) {
+    code += REFERRAL_ALPHABET[x % REFERRAL_ALPHABET.length];
+    x = (Math.imul(x, 1664525) + 1013904223) >>> 0;
+  }
+  return code;
+}
 const BILLING_GIST_FILE = "courseok-billing.json";
 
 function newId() {
@@ -43,7 +62,7 @@ function createFileBillingStore(dataDir, gistOptions = null) {
   function read() {
     try {
       if (!fs.existsSync(file)) {
-        return { devices: {}, promos: {}, redemptions: [], purchases: [] };
+        return { devices: {}, promos: {}, redemptions: [], purchases: [], referrals: {}, referralRedemptions: {} };
       }
       const raw = JSON.parse(fs.readFileSync(file, "utf8"));
       return {
@@ -51,9 +70,14 @@ function createFileBillingStore(dataDir, gistOptions = null) {
         promos: raw.promos && typeof raw.promos === "object" ? raw.promos : {},
         redemptions: Array.isArray(raw.redemptions) ? raw.redemptions : [],
         purchases: Array.isArray(raw.purchases) ? raw.purchases : [],
+        referrals: raw.referrals && typeof raw.referrals === "object" ? raw.referrals : {},
+        referralRedemptions:
+          raw.referralRedemptions && typeof raw.referralRedemptions === "object"
+            ? raw.referralRedemptions
+            : {},
       };
     } catch {
-      return { devices: {}, promos: {}, redemptions: [], purchases: [] };
+      return { devices: {}, promos: {}, redemptions: [], purchases: [], referrals: {}, referralRedemptions: {} };
     }
   }
 
@@ -86,6 +110,11 @@ function createFileBillingStore(dataDir, gistOptions = null) {
           promos: remote.promos && typeof remote.promos === "object" ? remote.promos : {},
           redemptions: Array.isArray(remote.redemptions) ? remote.redemptions : [],
           purchases: Array.isArray(remote.purchases) ? remote.purchases : [],
+          referrals: remote.referrals && typeof remote.referrals === "object" ? remote.referrals : {},
+          referralRedemptions:
+            remote.referralRedemptions && typeof remote.referralRedemptions === "object"
+              ? remote.referralRedemptions
+              : {},
         };
         fs.writeFileSync(file, JSON.stringify(state, null, 2));
         console.log("Billing store hydrated from GitHub Gist");
@@ -301,6 +330,44 @@ function createFileBillingStore(dataDir, gistOptions = null) {
       return { ok: true, analysesAdded: promo.analyses, ...balance };
     },
 
+    async ensureReferralCode(deviceId) {
+      const id = String(deviceId || "").trim();
+      if (!id) return null;
+      await this.registerDevice(id);
+      state.referrals = state.referrals || {};
+      const existing = Object.entries(state.referrals).find(([, owner]) => owner === id);
+      if (existing) return existing[0];
+      let code = referralCodeFor(id);
+      if (state.referrals[code] && state.referrals[code] !== id) {
+        code = `${code}X`;
+      }
+      state.referrals[code] = id;
+      write(state);
+      return code;
+    },
+
+    async redeemReferral(deviceId, code) {
+      const id = String(deviceId || "").trim();
+      const c = String(code || "").trim().toUpperCase().replace(/\s+/g, "");
+      state.referrals = state.referrals || {};
+      state.referralRedemptions = state.referralRedemptions || {};
+      let owner = state.referrals[c];
+      if (!owner) {
+        owner = Object.keys(state.devices).find((deviceId) => referralCodeFor(deviceId) === c) || "";
+        if (owner) state.referrals[c] = owner;
+      }
+      if (!owner) return { ok: false, reason: "invalid_code" };
+      if (owner === id) return { ok: false, reason: "own_code" };
+      if (state.referralRedemptions[id]) return { ok: false, reason: "already_redeemed" };
+      state.referralRedemptions[id] = { code: c, referrer: owner, atMs: Date.now() };
+      write(state);
+      await this.registerDevice(id);
+      await this.registerDevice(owner);
+      await this.addQuota(owner, REFERRAL_ANALYSES);
+      const referee = await this.addQuota(id, REFERRAL_ANALYSES);
+      return { ok: true, analysesAdded: REFERRAL_ANALYSES, ...referee };
+    },
+
     async createPurchase(entry) {
       const purchase = {
         id: entry.id || newId(),
@@ -377,6 +444,21 @@ async function createTursoBillingStore(url, authToken) {
   } catch (_) {
     /* column already exists */
   }
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS referral_codes (
+      code TEXT PRIMARY KEY,
+      owner_device_id TEXT NOT NULL,
+      created_at_ms INTEGER NOT NULL
+    )
+  `);
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS referral_redemptions (
+      referee_device_id TEXT PRIMARY KEY,
+      code TEXT NOT NULL,
+      referrer_device_id TEXT NOT NULL,
+      at_ms INTEGER NOT NULL
+    )
+  `);
   await client.execute(`
     CREATE TABLE IF NOT EXISTS promo_codes (
       code TEXT PRIMARY KEY,
@@ -674,6 +756,74 @@ async function createTursoBillingStore(url, authToken) {
         args: [newId(), id, c, analyses, Date.now()],
       });
       return { ok: true, analysesAdded: analyses, ...balance };
+    },
+
+    async ensureReferralCode(deviceId) {
+      const id = String(deviceId || "").trim();
+      if (!id) return null;
+      await this.registerDevice(id);
+      const existing = await client.execute({
+        sql: `SELECT code FROM referral_codes WHERE owner_device_id = ?`,
+        args: [id],
+      });
+      if (existing.rows[0]) return String(existing.rows[0].code);
+      let code = referralCodeFor(id);
+      const clash = await client.execute({
+        sql: `SELECT owner_device_id FROM referral_codes WHERE code = ?`,
+        args: [code],
+      });
+      if (clash.rows[0] && String(clash.rows[0].owner_device_id) !== id) {
+        code = `${code}X`;
+      }
+      await client.execute({
+        sql: `INSERT OR IGNORE INTO referral_codes (code, owner_device_id, created_at_ms) VALUES (?, ?, ?)`,
+        args: [code, id, Date.now()],
+      });
+      return code;
+    },
+
+    async redeemReferral(deviceId, code) {
+      const id = String(deviceId || "").trim();
+      const c = String(code || "").trim().toUpperCase().replace(/\s+/g, "");
+      const found = await client.execute({
+        sql: `SELECT owner_device_id FROM referral_codes WHERE code = ?`,
+        args: [c],
+      });
+      let owner = found.rows[0] ? String(found.rows[0].owner_device_id) : "";
+      if (!owner) {
+        const devices = await client.execute(`SELECT device_id FROM devices`);
+        const match = devices.rows.find((row) => referralCodeFor(String(row.device_id)) === c);
+        if (match) {
+          owner = String(match.device_id);
+          await client.execute({
+            sql: `INSERT OR IGNORE INTO referral_codes (code, owner_device_id, created_at_ms) VALUES (?, ?, ?)`,
+            args: [c, owner, Date.now()],
+          });
+        }
+      }
+      if (!owner) return { ok: false, reason: "invalid_code" };
+      if (owner === id) return { ok: false, reason: "own_code" };
+      await this.registerDevice(id);
+      await this.registerDevice(owner);
+      const now = Date.now();
+      try {
+        await client.execute({
+          sql: `
+            INSERT INTO referral_redemptions (referee_device_id, code, referrer_device_id, at_ms)
+            VALUES (?, ?, ?, ?)
+          `,
+          args: [id, c, owner, now],
+        });
+      } catch (err) {
+        const message = String(err && err.message ? err.message : err);
+        if (/unique|constraint/i.test(message)) {
+          return { ok: false, reason: "already_redeemed" };
+        }
+        throw err;
+      }
+      await this.addQuota(owner, REFERRAL_ANALYSES);
+      const referee = await this.addQuota(id, REFERRAL_ANALYSES);
+      return { ok: true, analysesAdded: REFERRAL_ANALYSES, ...referee };
     },
 
     async createPurchase(entry) {
