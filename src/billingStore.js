@@ -346,9 +346,31 @@ function createFileBillingStore(dataDir, gistOptions = null) {
       return code;
     },
 
-    async redeemReferral() {
-      // Sharing the app link does not grant analyses.
-      return { ok: false, reason: "disabled" };
+    async redeemReferral(deviceId, code) {
+      const id = String(deviceId || "").trim();
+      const c = String(code || "").trim().toUpperCase().replace(/\s+/g, "");
+      state.referrals = state.referrals || {};
+      state.referralRedemptions = state.referralRedemptions || {};
+      let owner = state.referrals[c];
+      if (!owner) {
+        owner = Object.keys(state.devices).find((deviceId) => referralCodeFor(deviceId) === c) || "";
+        if (owner) {
+          state.referrals[c] = owner;
+          write(state);
+        }
+      }
+      if (!owner) return { ok: false, reason: "invalid_code" };
+      if (owner === id) return { ok: false, reason: "own_code" };
+      // One referrer per phone. The first code wins; later codes do not pay again.
+      // A referrer may still invite several other drivers.
+      if (state.referralRedemptions[id]) return { ok: false, reason: "already_redeemed" };
+      state.referralRedemptions[id] = { code: c, referrer: owner, atMs: Date.now() };
+      write(state);
+      await this.registerDevice(id);
+      await this.registerDevice(owner);
+      await this.addQuota(owner, REFERRAL_ANALYSES);
+      const referee = await this.addQuota(id, REFERRAL_ANALYSES);
+      return { ok: true, analysesAdded: REFERRAL_ANALYSES, ...referee };
     },
 
     async createPurchase(entry) {
@@ -765,9 +787,48 @@ async function createTursoBillingStore(url, authToken) {
       return code;
     },
 
-    async redeemReferral() {
-      // Sharing the app link does not grant analyses.
-      return { ok: false, reason: "disabled" };
+    async redeemReferral(deviceId, code) {
+      const id = String(deviceId || "").trim();
+      const c = String(code || "").trim().toUpperCase().replace(/\s+/g, "");
+      const found = await client.execute({
+        sql: `SELECT owner_device_id FROM referral_codes WHERE code = ?`,
+        args: [c],
+      });
+      let owner = found.rows[0] ? String(found.rows[0].owner_device_id) : "";
+      if (!owner) {
+        const devices = await client.execute(`SELECT device_id FROM devices`);
+        const match = devices.rows.find((row) => referralCodeFor(String(row.device_id)) === c);
+        if (match) {
+          owner = String(match.device_id);
+          await client.execute({
+            sql: `INSERT OR IGNORE INTO referral_codes (code, owner_device_id, created_at_ms) VALUES (?, ?, ?)`,
+            args: [c, owner, Date.now()],
+          });
+        }
+      }
+      if (!owner) return { ok: false, reason: "invalid_code" };
+      if (owner === id) return { ok: false, reason: "own_code" };
+      await this.registerDevice(id);
+      await this.registerDevice(owner);
+      const now = Date.now();
+      try {
+        await client.execute({
+          sql: `
+            INSERT INTO referral_redemptions (referee_device_id, code, referrer_device_id, at_ms)
+            VALUES (?, ?, ?, ?)
+          `,
+          args: [id, c, owner, now],
+        });
+      } catch (err) {
+        const message = String(err && err.message ? err.message : err);
+        if (/unique|constraint/i.test(message)) {
+          return { ok: false, reason: "already_redeemed" };
+        }
+        throw err;
+      }
+      await this.addQuota(owner, REFERRAL_ANALYSES);
+      const referee = await this.addQuota(id, REFERRAL_ANALYSES);
+      return { ok: true, analysesAdded: REFERRAL_ANALYSES, ...referee };
     },
 
     async createPurchase(entry) {
